@@ -1,0 +1,226 @@
+2026-08-19T01:33:16.413Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:33:16.465Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "precheckCompleted",
+  "phase": "precheck",
+  "status": "succeeded"
+}}).
+2026-08-19T01:33:16.488Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:33:16.583Z [INFO] Project g:\Proyecto_FacturacionElectronica is a maven project, try to get java version from pom.xml
+2026-08-19T01:33:16.606Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'precheckCompleted' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:33:16.626Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:33:16.658Z [INFO] Project java version: 17
+2026-08-19T01:33:16.692Z [INFO] Maven project detected.
+2026-08-19T01:33:16.710Z [INFO] Build tool type: mvn
+2026-08-19T01:33:16.986Z [INFO] JDK: undefined
+2026-08-19T01:33:17.009Z [ERROR] Failed to detect or resolve JDK for the project at g:\Proyecto_FacturacionElectronica.
+2026-08-19T01:33:17.030Z [ERROR] [ReportEventTool] Failed to send project info telemetry: UserError: Failed to detect or resolve JDK for the project at g:\Proyecto_FacturacionElectronica. Please ensure JDK 17 is installed and properly configured on the machine.
+2026-08-19T01:33:19.963Z [INFO] ---------------------prepare appmod-list-jdks----------------------
+2026-08-19T01:33:20.010Z [INFO] [Tool.prepareInvocation]({name: appmod-list-jdks, input: {
+  "sessionId": "20260819013315"
+}}).
+2026-08-19T01:33:20.034Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:33:20.059Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "List jdks"
+}}).
+2026-08-19T01:33:20.082Z [INFO] ----------------------prepared appmod-list-jdks----------------------
+2026-08-19T01:33:20.110Z [INFO] ----------------------invoke appmod-list-jdks----------------------
+2026-08-19T01:33:20.134Z [INFO] [Tool.invoke]({name: appmod-list-jdks, input: {
+  "sessionId": "20260819013315"
+}}).
+2026-08-19T01:33:20.155Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:33:20.194Z [INFO] [Tool.invoke]({result: {
+  "message": "We found following jdks in your system:\n\n1. Java 21.0.9\n   📁 Path: C:\\Program Files\\Java\\jdk-21\\bin\n   🏷️ Source: others\n\n2. Java 25.0.1\n   📁 Path: C:\\Program Files\\Java\\jdk-25\\bin\n   🏷️ Source: others\n\nTotal: 2 JDK installation(s) found"
+}}).
+2026-08-19T01:33:20.215Z [INFO] ----------------------invoked appmod-list-jdks----------------------
+2026-08-19T01:33:20.250Z [INFO] ---------------------prepare appmod-list-mavens----------------------
+2026-08-19T01:33:20.272Z [INFO] [Tool.prepareInvocation]({name: appmod-list-mavens, input: {
+  "sessionId": "20260819013315",
+  "includeVersion": true
+}}).
+2026-08-19T01:33:20.295Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:33:20.317Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "List mavens"
+}}).
+2026-08-19T01:33:20.339Z [INFO] ----------------------prepared appmod-list-mavens----------------------
+2026-08-19T01:33:20.361Z [INFO] ----------------------invoke appmod-list-mavens----------------------
+2026-08-19T01:33:20.382Z [INFO] [Tool.invoke]({name: appmod-list-mavens, input: {
+  "sessionId": "20260819013315",
+  "includeVersion": true
+}}).
+2026-08-19T01:33:20.404Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:33:20.430Z [INFO] [Tool.invoke]({result: {
+  "message": "No Maven installations found."
+}}).
+2026-08-19T01:33:20.451Z [INFO] ----------------------invoked appmod-list-mavens----------------------
+2026-08-19T01:33:35.603Z [INFO] ---------------------prepare appmod-report-event----------------------
+2026-08-19T01:33:35.650Z [INFO] [Tool.prepareInvocation]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "planGenerationStarted",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:33:35.670Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:33:35.692Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Report upgrade event"
+}}).
+2026-08-19T01:33:35.713Z [INFO] ----------------------prepared appmod-report-event----------------------
+2026-08-19T01:33:35.740Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:33:35.763Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "planGenerationStarted",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:33:35.785Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:33:35.808Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'planGenerationStarted' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:33:35.830Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:34:09.997Z [INFO] ---------------------prepare appmod-report-event----------------------
+2026-08-19T01:34:10.044Z [INFO] [Tool.prepareInvocation]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "planInitialized",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:10.067Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:34:10.090Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Report upgrade event"
+}}).
+2026-08-19T01:34:10.112Z [INFO] ----------------------prepared appmod-report-event----------------------
+2026-08-19T01:34:10.137Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:34:10.162Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "planInitialized",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:10.185Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:34:10.208Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'planInitialized' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:34:10.231Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:34:12.921Z [INFO] ---------------------prepare appmod-report-event----------------------
+2026-08-19T01:34:12.971Z [INFO] [Tool.prepareInvocation]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "environmentAnalyzed",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:12.995Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:34:13.018Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Report upgrade event"
+}}).
+2026-08-19T01:34:13.043Z [INFO] ----------------------prepared appmod-report-event----------------------
+2026-08-19T01:34:13.071Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:34:13.095Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "environmentAnalyzed",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:13.118Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:34:13.142Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'environmentAnalyzed' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:34:13.164Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:34:14.712Z [INFO] ---------------------prepare appmod-report-event----------------------
+2026-08-19T01:34:14.762Z [INFO] [Tool.prepareInvocation]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "dependenciesAnalyzed",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:14.785Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:34:14.809Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Report upgrade event"
+}}).
+2026-08-19T01:34:14.834Z [INFO] ----------------------prepared appmod-report-event----------------------
+2026-08-19T01:34:14.869Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:34:14.892Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "dependenciesAnalyzed",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:14.914Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:34:14.938Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'dependenciesAnalyzed' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:34:14.962Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:34:16.736Z [INFO] ---------------------prepare appmod-report-event----------------------
+2026-08-19T01:34:16.782Z [INFO] [Tool.prepareInvocation]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "upgradePathDesigned",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:17.135Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:34:17.159Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Report upgrade event"
+}}).
+2026-08-19T01:34:17.183Z [INFO] ----------------------prepared appmod-report-event----------------------
+2026-08-19T01:34:17.214Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:34:17.240Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "upgradePathDesigned",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:17.265Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:34:17.289Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'upgradePathDesigned' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:34:17.312Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:34:18.737Z [INFO] ---------------------prepare appmod-report-event----------------------
+2026-08-19T01:34:18.786Z [INFO] [Tool.prepareInvocation]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "planReviewed",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:18.809Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:34:18.833Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Report upgrade event"
+}}).
+2026-08-19T01:34:18.858Z [INFO] ----------------------prepared appmod-report-event----------------------
+2026-08-19T01:34:18.888Z [INFO] ----------------------invoke appmod-report-event----------------------
+2026-08-19T01:34:18.913Z [INFO] [Tool.invoke]({name: appmod-report-event, input: {
+  "sessionId": "20260819013315",
+  "projectPath": "g:\\Proyecto_FacturacionElectronica",
+  "event": "planReviewed",
+  "phase": "plan",
+  "status": "succeeded"
+}}).
+2026-08-19T01:34:18.936Z [INFO] [Tool.invoke] do invoke.
+2026-08-19T01:34:18.959Z [INFO] [Tool.invoke]({result: {
+  "message": "Event 'planReviewed' reported!\nSession ID: 20260819013315,\nSession Dir: g:\\Proyecto_FacturacionElectronica\\.github\\java-upgrade\\20260819013315"
+}}).
+2026-08-19T01:34:18.979Z [INFO] ----------------------invoked appmod-report-event----------------------
+2026-08-19T01:34:22.037Z [INFO] ---------------------prepare appmod-confirm-upgrade-plan----------------------
+2026-08-19T01:34:22.089Z [INFO] [Tool.prepareInvocation]({name: appmod-confirm-upgrade-plan, input: {
+  "sessionId": "20260819013315"
+}}).
+2026-08-19T01:34:22.113Z [INFO] [Tool.prepareInvocation] do prepare invocation.
+2026-08-19T01:34:22.137Z [INFO] [Tool.prepareInvocation]({result: {
+  "invocationMessage": "Review [upgrade plan](file:///g:/Proyecto_FacturacionElectronica/.github/java-upgrade/20260819013315/plan.md)",
+  "confirmationMessages": {
+    "title": "Plan generated",
+    "message": "Please review the generated plan and make any necessary adjustments before proceeding. You can modify the generated [`plan.md`](file:///g:/Proyecto_FacturacionElectronica/.github/java-upgrade/20260819013315/plan.md) directly."
+  }
+}}).
+2026-08-19T01:34:22.161Z [INFO] ----------------------prepared appmod-confirm-upgrade-plan----------------------
