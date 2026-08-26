@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07111f">
+  <meta name="description" content="Portal de Facturación Electrónica - UTN">
+  <title>FacturaSmart · Facturación Electrónica</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="background-orb orb-one" aria-hidden="true"></div>
+  <div class="background-orb orb-two" aria-hidden="true"></div>
+
+  <section id="authScreen" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand-row">
+        <div class="brand-mark">F</div>
+        <div><strong>Factura<span>Smart</span></strong><small>Servicio de Facturación Electrónica</small></div>
+      </div>
+
+      <div class="auth-copy">
+        <span class="kicker">ACCESO SEGURO</span>
+        <h1>Administra tus comprobantes desde un solo lugar.</h1>
+        <p>Regístrate como cliente del servicio o inicia sesión para consultar facturas, XML, PDF y estados de envío.</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="tab active" data-auth-tab="login">Iniciar sesión</button>
+        <button class="tab" data-auth-tab="register">Crear cuenta</button>
+      </div>
+
+      <form id="loginForm" class="auth-form" data-auth-panel="login">
+        <label>Correo electrónico<input name="correo" type="email" autocomplete="username" required placeholder="correo@empresa.com"></label>
+        <label>Contraseña<input name="password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
+        <button class="primary-button" type="submit">Ingresar</button>
+      </form>
+
+      <form id="registerForm" class="auth-form hidden" data-auth-panel="register">
+        <label>Nombre o razón social<input name="nombreRazonSocial" required placeholder="Mi Empresa S.A."></label>
+        <div class="form-grid two">
+          <label>Tipo de identificación<select name="tipoIdentificacion"><option>CEDULA_FISICA</option><option>CEDULA_JURIDICA</option><option>DIMEX</option><option>NITE</option><option>PASAPORTE</option><option>EXTRANJERO</option></select></label>
+          <label>Número<input name="numeroIdentificacion" required placeholder="3101234567"></label>
+        </div>
+        <div class="form-grid two">
+          <label>Correo<input name="correo" type="email" required placeholder="correo@empresa.com"></label>
+          <label>Teléfono<input name="telefono" placeholder="88888888"></label>
+        </div>
+        <label>Contraseña<input name="password" type="password" minlength="8" required placeholder="Mínimo 8 caracteres"></label>
+        <button class="primary-button" type="submit">Crear cuenta</button>
+      </form>
+      <p id="authMessage" class="message" role="status"></p>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand-row sidebar-brand">
+        <div class="brand-mark">F</div>
+        <div><strong>Factura<span>Smart</span></strong><small>Portal del cliente</small></div>
+      </div>
+      <nav>
+        <button class="nav-item active" data-view="dashboardView"><span>⌂</span>Resumen</button>
+        <button class="nav-item" data-view="facturasView"><span>▤</span>Facturas</button>
+        <button class="nav-item" data-view="nuevaFacturaView"><span>＋</span>Nueva factura</button>
+        <button class="nav-item" data-view="integracionesView"><span>↗</span>Integraciones</button>
+        <button class="nav-item" data-view="perfilView"><span>○</span>Mi perfil</button>
+      </nav>
+      <div class="sidebar-foot">
+        <small>API REST protegida con JWT</small>
+        <button id="logout" class="secondary-button">Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div><span class="kicker">FACTURACIÓN ELECTRÓNICA</span><h2 id="pageTitle">Resumen</h2></div>
+        <div class="user-chip"><span id="avatar">FS</span><div><strong id="headerName">Cliente</strong><small id="headerEmail">—</small></div></div>
+      </header>
+
+      <section id="dashboardView" class="view active-view">
+        <div class="hero-card">
+          <div><span class="status-pill"><i></i> Servicio activo</span><h1>Tu facturación, clara y lista para consultar.</h1><p>Genera comprobantes, valida XML, descarga PDF y revisa la respuesta de DGTD desde el mismo portal.</p></div>
+          <div class="hero-visual"><span>XML</span><span>PDF</span><strong>✓</strong></div>
+        </div>
+        <div class="stat-grid">
+          <article class="stat-card"><small>Total facturas</small><strong id="statTotal">0</strong><span>registradas</span></article>
+          <article class="stat-card"><small>Aceptadas</small><strong id="statAceptadas">0</strong><span>por DGTD</span></article>
+          <article class="stat-card"><small>Pendientes</small><strong id="statPendientes">0</strong><span>de integración/envío</span></article>
+          <article class="stat-card"><small>XML válidos</small><strong id="statXml">0</strong><span>según XSD configurado</span></article>
+        </div>
+        <section class="panel">
+          <div class="section-heading"><div><span class="kicker">ACTIVIDAD</span><h3>Facturas recientes</h3></div><button class="text-button" data-go="facturasView">Ver todas</button></div>
+          <div id="recentInvoices" class="invoice-list empty-state">Aún no hay facturas.</div>
+        </section>
+      </section>
+
+      <section id="facturasView" class="view">
+        <div class="section-heading page-heading"><div><span class="kicker">COMPROBANTES</span><h3>Mis facturas</h3><p>Consulta XML, PDF, estados y acuses.</p></div><button id="refreshInvoices" class="secondary-button compact">Actualizar</button></div>
+        <div class="panel"><div id="invoiceTable" class="invoice-list empty-state">Cargando facturas...</div></div>
+      </section>
+
+      <section id="nuevaFacturaView" class="view">
+        <div class="section-heading page-heading"><div><span class="kicker">NUEVO COMPROBANTE</span><h3>Procesar factura</h3><p>Formulario de laboratorio para consumir la API REST sin usar Postman.</p></div></div>
+        <form id="invoiceForm" class="panel invoice-form">
+          <div class="form-grid three">
+            <label>ID factura<input name="id" required placeholder="FAC-002"></label>
+            <label>Fecha<input name="fecha" type="datetime-local" required></label>
+            <label>Moneda<select name="moneda"><option value="CRC">CRC</option><option value="USD">USD</option></select></label>
+          </div>
+          <div class="form-grid two"><label>Condición de venta<input name="condicionVenta" value="CONTADO" required></label><label>Medio de pago<input name="medioPago" value="SINPE" required></label></div>
+          <h4>Receptor</h4>
+          <div class="form-grid three"><label>Nombre<input name="receptorNombre" required></label><label>Tipo<select name="receptorTipo"><option>CEDULA_FISICA</option><option>CEDULA_JURIDICA</option><option>DIMEX</option><option>PASAPORTE</option><option>EXTRANJERO</option></select></label><label>Identificación<input name="receptorNumero" required></label></div>
+          <label>Correo del receptor<input name="receptorCorreo" type="email"></label>
+          <div class="detail-section-heading">
+            <div><h4>Detalle</h4><p>Agrega todos los productos o servicios antes de generar la factura.</p></div>
+            <span id="lineCountBadge" class="line-count-badge">0 líneas</span>
+          </div>
+          <div class="line-editor">
+            <div class="form-grid four">
+              <label>Descripción<input id="itemDetalle" placeholder="Ej. Arroz con pollo"></label>
+              <label>Cantidad<input id="itemCantidad" type="number" min="1" step="1" value="1"></label>
+              <label>Precio unitario<input id="itemPrecio" type="number" min="0.01" step="0.01" placeholder="0.00"></label>
+              <label>IVA %<input id="itemTarifa" type="number" min="0" step="0.01" value="13"></label>
+            </div>
+            <div class="line-editor-actions">
+              <button type="button" class="secondary-button compact" id="addInvoiceLine">+ Agregar línea</button>
+              <button type="button" class="text-button hidden" id="cancelLineEdit">Cancelar edición</button>
+            </div>
+          </div>
+          <div id="invoiceLines" class="invoice-lines-empty">Aún no has agregado productos o servicios.</div>
+          <div class="invoice-totals-preview">
+            <div><span>Subtotal gravado</span><strong id="previewGravado">₡0,00</strong></div>
+            <div><span>Subtotal exento</span><strong id="previewExento">₡0,00</strong></div>
+            <div><span>IVA</span><strong id="previewImpuesto">₡0,00</strong></div>
+            <div class="grand-total"><span>Total</span><strong id="previewTotal">₡0,00</strong></div>
+          </div>
+          <div class="form-actions"><button type="submit" class="primary-button inline" id="generateInvoiceButton">Generar factura</button><span id="invoiceFormResult" class="muted"></span></div>
+        </form>
+      </section>
+
+      <section id="integracionesView" class="view">
+        <div class="section-heading page-heading"><div><span class="kicker">SERVICIOS EXTERNOS</span><h3>Integraciones</h3><p>Estado de los puntos que dependen de otros módulos del proyecto.</p></div></div>
+        <div class="integration-grid">
+          <article class="integration-card"><div class="integration-icon">✍</div><div><span class="integration-state waiting">Preparada</span><h4>Firma digital / cifrado</h4><p>El adaptador está listo para conectarse cuando el grupo responsable entregue el contrato REST.</p></div></article>
+          <article class="integration-card"><div class="integration-icon">DG</div><div><span id="dgtdState" class="integration-state">SIMULADO</span><h4>DGTD / Mini Tributación</h4><p>El flujo registra aceptación, rechazo, motivo y número de acuse.</p></div></article>
+          <article class="integration-card"><div class="integration-icon">B</div><div><span id="bankyState" class="integration-state waiting">Pendiente</span><h4>BankyFinanzas</h4><p>Checkout preparado con validación de origen. Requiere el MERCHANT_ID propio del grupo.</p><button id="bankyDemo" class="secondary-button compact">Probar checkout</button></div></article>
+          <article class="integration-card"><div class="integration-icon">FB</div><div><span id="facturaBonitaState" class="integration-state waiting">Comprobando</span><h4>Factura Bonita</h4><p>Integrada con la API compartida del curso. Sincroniza la factura y permite descargar el PDF visual o abrir su vista HTML.</p></div></article>
+          <article class="integration-card"><div class="integration-icon">X</div><div><span class="integration-state ok">Activo</span><h4>Validador XML/XSD</h4><p>El XML se valida al generarse, al consultarse y antes del envío a DGTD.</p></div></article>
+        </div>
+      </section>
+
+      <section id="perfilView" class="view">
+        <div class="section-heading page-heading"><div><span class="kicker">CUENTA</span><h3>Mi perfil</h3></div></div>
+        <div class="panel profile-card"><div class="profile-avatar" id="profileAvatar">FS</div><div id="profileInfo">Cargando...</div></div>
+      </section>
+
+      <p id="globalMessage" class="toast hidden" role="status"></p>
+    </main>
+  </div>
+
+  <dialog id="invoiceDialog" class="invoice-dialog">
+    <button class="dialog-close" id="closeDialog">×</button>
+    <div id="invoiceDialogBody"></div>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

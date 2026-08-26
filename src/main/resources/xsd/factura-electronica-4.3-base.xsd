@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<xs:schema
+        xmlns:xs="http://www.w3.org/2001/XMLSchema"
+        targetNamespace="https://cdn.comprobanteselectronicos.go.cr/xml-properties/v4.3"
+        xmlns="https://cdn.comprobanteselectronicos.go.cr/xml-properties/v4.3"
+        elementFormDefault="qualified">
+
+    <xs:simpleType name="DecimalNoNegativo">
+        <xs:restriction base="xs:decimal">
+            <xs:minInclusive value="0"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="DecimalPositivo">
+        <xs:restriction base="xs:decimal">
+            <xs:minExclusive value="0"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="TextoNoVacio">
+        <xs:restriction base="xs:string">
+            <xs:minLength value="1"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:element name="FacturaElectronica">
+        <xs:complexType>
+            <xs:sequence>
+
+                <xs:element name="Clave" type="TextoNoVacio"/>
+                <xs:element name="NumeroConsecutivo" type="TextoNoVacio"/>
+                <xs:element name="FechaEmision" type="TextoNoVacio"/>
+                <xs:element name="CondicionVenta" type="TextoNoVacio"/>
+                <xs:element name="MedioPago" type="TextoNoVacio"/>
+
+                <xs:element name="Emisor" type="TerceroType"/>
+                <xs:element name="Receptor" type="TerceroType"/>
+
+                <xs:element name="DetalleServicio">
+                    <xs:complexType>
+                        <xs:sequence>
+
+                            <xs:element
+                                    name="LineaDetalle"
+                                    minOccurs="1"
+                                    maxOccurs="unbounded">
+
+                                <xs:complexType>
+                                    <xs:sequence>
+
+                                        <xs:element
+                                                name="NumeroLinea"
+                                                type="xs:positiveInteger"/>
+
+                                        <xs:element
+                                                name="Detalle"
+                                                type="TextoNoVacio"/>
+
+                                        <xs:element
+                                                name="Cantidad"
+                                                type="xs:positiveInteger"/>
+
+                                        <xs:element
+                                                name="PrecioUnitario"
+                                                type="DecimalPositivo"/>
+
+                                        <xs:element
+                                                name="Descuento"
+                                                type="DecimalNoNegativo"/>
+
+                                        <xs:element
+                                                name="TarifaImpuesto"
+                                                type="DecimalNoNegativo"/>
+
+                                        <xs:element
+                                                name="SubTotal"
+                                                type="DecimalNoNegativo"/>
+
+                                        <xs:element
+                                                name="MontoTotalLinea"
+                                                type="DecimalPositivo"/>
+
+                                    </xs:sequence>
+                                </xs:complexType>
+
+                            </xs:element>
+
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+
+                <xs:element name="ResumenFactura">
+                    <xs:complexType>
+                        <xs:sequence>
+
+                            <xs:element
+                                    name="Moneda"
+                                    type="TextoNoVacio"/>
+
+                            <xs:element
+                                    name="TotalGravado"
+                                    type="DecimalNoNegativo"/>
+
+                            <xs:element
+                                    name="TotalExento"
+                                    type="DecimalNoNegativo"/>
+
+                            <xs:element
+                                    name="TotalDescuentos"
+                                    type="DecimalNoNegativo"/>
+
+                            <xs:element
+                                    name="TotalImpuesto"
+                                    type="DecimalNoNegativo"/>
+
+                            <xs:element
+                                    name="TotalComprobante"
+                                    type="DecimalPositivo"/>
+
+                        </xs:sequence>
+                    </xs:complexType>
+                </xs:element>
+
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:complexType name="TerceroType">
+        <xs:sequence>
+
+            <xs:element
+                    name="Nombre"
+                    type="TextoNoVacio"/>
+
+            <xs:element name="Identificacion">
+                <xs:complexType>
+                    <xs:sequence>
+
+                        <xs:element
+                                name="Tipo"
+                                type="TextoNoVacio"/>
+
+                        <xs:element
+                                name="Numero"
+                                type="TextoNoVacio"/>
+
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+
+            <xs:element
+                    name="CorreoElectronico"
+                    type="xs:string"
+                    minOccurs="0"/>
+
+        </xs:sequence>
+    </xs:complexType>
+
+</xs:schema>
