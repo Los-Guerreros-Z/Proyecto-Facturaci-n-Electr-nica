@@ -1,0 +1,624 @@
+{
+  "info": {
+    "name": "Facturacion Electronica - Flujo completo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "facturaId",
+      "value": ""
+    },
+    {
+      "key": "facturaRechazoId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Config pública",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/config/public",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "config",
+            "public"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Config 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"No expone secretos\", () => pm.expect(pm.response.text()).not.to.include(\"JWT_SECRET\"));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Registrar cliente",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/registro",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "registro"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombreRazonSocial\": \"ParkSmart Demo\",\n  \"tipoIdentificacion\": \"CEDULA_JURIDICA\",\n  \"numeroIdentificacion\": \"3101999999\",\n  \"correo\": \"parksmart.demo@utn.local\",\n  \"telefono\": \"88888888\",\n  \"password\": \"ParkSmart2026!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Registro OK\", () => pm.expect(pm.response.code).to.be.oneOf([201,400]));",
+              "if (pm.response.code === 201) { const d=pm.response.json(); pm.collectionVariables.set(\"accessToken\", d.accessToken); }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "auth",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"correo\": \"parksmart.demo@utn.local\",\n  \"password\": \"ParkSmart2026!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Login 200\", () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.collectionVariables.set(\"accessToken\", d.accessToken);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Mi perfil",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/clientes/me",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "clientes",
+            "me"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Perfil 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Procesar factura",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/procesar",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "procesar"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{$randomUUID}}\",\n  \"fecha\": \"2026-08-24T20:00:00\",\n  \"moneda\": \"CRC\",\n  \"condicionVenta\": \"01\",\n  \"medioPago\": \"01\",\n  \"tipoDocumento\": \"FACTURA_ELECTRONICA\",\n  \"emisor\": {\n    \"nombre\": \"ParkSmart Demo\",\n    \"identificacion\": {\n      \"tipo\": \"CEDULA_JURIDICA\",\n      \"numero\": \"3101999999\"\n    },\n    \"correo\": \"parksmart.demo@utn.local\"\n  },\n  \"receptor\": {\n    \"nombre\": \"Cliente Final\",\n    \"identificacion\": {\n      \"tipo\": \"CEDULA_FISICA\",\n      \"numero\": \"101110111\"\n    },\n    \"correo\": \"cliente@example.com\"\n  },\n  \"items\": [\n    {\n      \"numeroLinea\": 1,\n      \"detalle\": \"Servicio de estacionamiento\",\n      \"cantidad\": 1,\n      \"precioUnitario\": 1000,\n      \"descuento\": 0,\n      \"impuesto\": {\n        \"tarifa\": 13\n      },\n      \"subtotal\": 1000,\n      \"montoTotalLinea\": 1130\n    }\n  ],\n  \"totales\": {\n    \"totalGravado\": 1000,\n    \"totalExento\": 0,\n    \"totalDescuentos\": 0,\n    \"totalImpuesto\": 130,\n    \"totalComprobante\": 1130\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Factura 200\", () => pm.response.to.have.status(200));",
+              "const d=pm.response.json(); pm.collectionVariables.set(\"facturaId\", d.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Mis facturas",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Facturas 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Obtener factura",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Factura 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 XML",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}/xml",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}",
+            "xml"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"XML 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 PDF",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}/pdf",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}",
+            "pdf"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"PDF 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Enviar DGTD simulado",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}/enviar",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}",
+            "enviar"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Envio 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Acuse presente\", () => pm.expect(pm.response.json().numeroAcuse).to.exist);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Historial envios",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}/envios",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}",
+            "envios"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Envios 200\", () => pm.response.to.have.status(200));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Factura rechazada simulada",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/procesar",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "procesar"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"RECHAZO-{{$timestamp}}\",\n  \"fecha\": \"2026-08-25T16:00:00\",\n  \"moneda\": \"CRC\",\n  \"condicionVenta\": \"CONTADO\",\n  \"medioPago\": \"SINPE\",\n  \"tipoDocumento\": \"FACTURA_ELECTRONICA\",\n  \"emisor\": {\"nombre\": \"ParkSmart Demo\", \"identificacion\": {\"tipo\": \"CEDULA_JURIDICA\", \"numero\": \"3101999999\"}, \"correo\": \"parksmart.demo@utn.local\"},\n  \"receptor\": {\"nombre\": \"Cliente Rechazo\", \"identificacion\": {\"tipo\": \"CEDULA_FISICA\", \"numero\": \"205550555\"}, \"correo\": \"rechazo@example.com\"},\n  \"items\": [{\"numeroLinea\": 1, \"detalle\": \"Servicio\", \"cantidad\": 1, \"precioUnitario\": 1000, \"descuento\": 0, \"impuesto\": {\"tarifa\": 13}, \"subtotal\": 1000, \"montoTotalLinea\": 1130}],\n  \"totales\": {\"totalGravado\": 1000, \"totalExento\": 0, \"totalDescuentos\": 0, \"totalImpuesto\": 130, \"totalComprobante\": 1130}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Factura rechazo creada\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code===200) pm.collectionVariables.set(\"facturaRechazoId\", pm.response.json().id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Enviar rechazo DGTD",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaRechazoId}}/enviar",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaRechazoId}}",
+            "enviar"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"DGTD rechaza\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Estado RECHAZADO\", () => pm.expect(pm.response.json().estado).to.eql(\"RECHAZADO\"));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Factura bonita PDF",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}/pdf-bonita",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}",
+            "pdf-bonita"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "15 Factura bonita HTML",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/facturas/{{facturaId}}/html-bonita",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "facturas",
+            "{{facturaId}}",
+            "html-bonita"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
