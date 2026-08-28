@@ -23,6 +23,14 @@ public record FacturaResponse(
         String titularTarjeta,
         Double montoPagado,
         boolean xmlValido,
+        boolean firmaValida,
+        String hashDocumento,
+        String serialCertificado,
+        String firmanteIdentificacion,
+        String firmanteNombre,
+        String algoritmoFirma,
+        String estadoCertificado,
+        String fechaFirmaHsm,
         LocalDateTime fechaRegistro
 ) {
     public static FacturaResponse from(Factura f) {
@@ -43,6 +51,14 @@ public record FacturaResponse(
                 f.getTitularTarjeta(),
                 f.getMontoPagado(),
                 f.isXmlValido(),
+                f.isFirmaValida(),
+                f.getHashDocumento(),
+                f.getSerialCertificado(),
+                f.getFirmanteIdentificacion(),
+                f.getFirmanteNombre(),
+                f.getAlgoritmoFirma(),
+                f.getEstadoCertificado(),
+                f.getFechaFirmaHsm(),
                 f.getFechaRegistro()
         );
     }

@@ -3,6 +3,7 @@ package application.service;
 import application.dto.EnvioResponse;
 import application.dto.FacturaRequest;
 import application.dto.FacturaResponse;
+import application.dto.FirmaHsmRequest;
 import application.dto.PagoBankyRequest;
 import application.mapper.FacturaMapper;
 import domain.entity.Cliente;
@@ -14,11 +15,12 @@ import domain.enums.EstadoPago;
 import domain.repository.EnvioFacturaRepository;
 import domain.repository.FacturaRepository;
 import infraestructure.integration.DgtdClient;
-import infraestructure.integration.FirmaDigitalClient;
+import infraestructure.integration.HsmSignClient;
 import infraestructure.integration.FacturaBonitaClient;
 import infraestructure.pdf.FacturaPdfGenerator;
 import infraestructure.xml.generator.FacturaXmlGenerator;
 import infraestructure.xml.validator.XmlValidator;
+import infraestructure.xml.validator.SignedXmlMatcher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +36,8 @@ public class FacturaServiceImpl implements FacturaService {
     private final ClienteService clienteService;
     private final FacturaXmlGenerator xmlGenerator;
     private final XmlValidator xmlValidator;
-    private final FirmaDigitalClient firmaDigitalClient;
+    private final SignedXmlMatcher signedXmlMatcher;
+    private final HsmSignClient hsmSignClient;
     private final DgtdClient dgtdClient;
     private final FacturaPdfGenerator pdfGenerator;
     private final FacturaBonitaClient facturaBonitaClient;
@@ -46,7 +49,8 @@ public class FacturaServiceImpl implements FacturaService {
             ClienteService clienteService,
             FacturaXmlGenerator xmlGenerator,
             XmlValidator xmlValidator,
-            FirmaDigitalClient firmaDigitalClient,
+            SignedXmlMatcher signedXmlMatcher,
+            HsmSignClient hsmSignClient,
             DgtdClient dgtdClient,
             FacturaPdfGenerator pdfGenerator,
             FacturaBonitaClient facturaBonitaClient
@@ -57,7 +61,8 @@ public class FacturaServiceImpl implements FacturaService {
         this.clienteService = clienteService;
         this.xmlGenerator = xmlGenerator;
         this.xmlValidator = xmlValidator;
-        this.firmaDigitalClient = firmaDigitalClient;
+        this.signedXmlMatcher = signedXmlMatcher;
+        this.hsmSignClient = hsmSignClient;
         this.dgtdClient = dgtdClient;
         this.pdfGenerator = pdfGenerator;
         this.facturaBonitaClient = facturaBonitaClient;
@@ -110,23 +115,10 @@ public class FacturaServiceImpl implements FacturaService {
 
         factura.setXmlGenerado(xml);
         factura.setXmlValido(true);
+
+        // El XML válido queda listo para que el usuario lo firme en HSM Sign CR.
+        // El PIN nunca pasa por FacturaSmart.
         factura.setEstado(EstadoFactura.VALIDADA);
-
-        // Preparar firma digital
-        FirmaDigitalClient.FirmaResult firma =
-                firmaDigitalClient.prepararFirma(xml, cliente);
-
-        if (firma.aplicada()) {
-
-            factura.setXmlGenerado(firma.xmlResultado());
-            factura.setEstado(EstadoFactura.FIRMADA);
-
-        } else {
-
-            factura.setEstado(
-                    EstadoFactura.PENDIENTE_INTEGRACION
-            );
-        }
 
         return FacturaResponse.from(
                 facturaRepository.save(factura)
@@ -167,6 +159,14 @@ public class FacturaServiceImpl implements FacturaService {
 
         Factura factura =
                 obtenerFacturaPropia(id, correoCliente);
+
+        // Si existe una firma HSM válida, este endpoint devuelve el XML final firmado.
+        // El XML original se conserva en xmlGenerado para trazabilidad y validación XSD.
+        if (factura.isFirmaValida()
+                && factura.getXmlFirmado() != null
+                && !factura.getXmlFirmado().isBlank()) {
+            return factura.getXmlFirmado();
+        }
 
         String xml = factura.getXmlGenerado();
 
@@ -220,6 +220,78 @@ public class FacturaServiceImpl implements FacturaService {
 
     @Override
     @Transactional
+    public FacturaResponse registrarFirmaHsm(
+            String id,
+            FirmaHsmRequest request,
+            String correoCliente
+    ) {
+        Factura factura = obtenerFacturaPropia(id, correoCliente);
+
+        if (!factura.isXmlValido()
+                || factura.getXmlGenerado() == null
+                || factura.getXmlGenerado().isBlank()) {
+            throw new IllegalArgumentException(
+                    "La factura debe tener un XML válido antes de firmarse"
+            );
+        }
+
+        if (factura.isFirmaValida()) {
+            throw new IllegalArgumentException(
+                    "La factura ya posee una firma digital validada"
+            );
+        }
+
+        if (!signedXmlMatcher.correspondeAlOriginal(
+                factura.getXmlGenerado(),
+                request.xmlFirmado()
+        )) {
+            throw new IllegalArgumentException(
+                    "El XML firmado no corresponde al comprobante original generado por FacturaSmart"
+            );
+        }
+
+        HsmSignClient.ValidacionFirmaResult validacion =
+                hsmSignClient.validarFirma(request.xmlFirmado());
+
+        if (!validacion.esValida()) {
+            throw new IllegalArgumentException(
+                    validacion.motivo() != null
+                            ? validacion.motivo()
+                            : "HSM Sign CR indicó que la firma digital no es válida"
+            );
+        }
+
+        String esperado = normalizarIdentificacion(
+                factura.getEmisor() != null
+                        ? factura.getEmisor().getNumeroIdentificacion()
+                        : null
+        );
+        String firmadoPor = normalizarIdentificacion(validacion.signerId());
+
+        if (!esperado.isBlank()
+                && !firmadoPor.isBlank()
+                && !esperado.equals(firmadoPor)) {
+            throw new IllegalArgumentException(
+                    "La firma digital pertenece a una identificación distinta del emisor"
+            );
+        }
+
+        factura.setXmlFirmado(request.xmlFirmado());
+        factura.setFirmaValida(true);
+        factura.setHashDocumento(limpiarDatoFirma(request.hashDocumento(), 180));
+        factura.setSerialCertificado(limpiarDatoFirma(request.serialCertificado(), 180));
+        factura.setFirmanteIdentificacion(limpiarDatoFirma(validacion.signerId(), 80));
+        factura.setFirmanteNombre(limpiarDatoFirma(validacion.signerName(), 200));
+        factura.setAlgoritmoFirma(limpiarDatoFirma(validacion.algorithm(), 120));
+        factura.setEstadoCertificado(limpiarDatoFirma(validacion.certificateStatus(), 80));
+        factura.setFechaFirmaHsm(limpiarDatoFirma(validacion.signatureDate(), 120));
+        factura.setEstado(EstadoFactura.FIRMADA);
+
+        return FacturaResponse.from(facturaRepository.save(factura));
+    }
+
+    @Override
+    @Transactional
     public EnvioResponse enviarADgtd(
             String id,
             String correoCliente
@@ -228,23 +300,30 @@ public class FacturaServiceImpl implements FacturaService {
         Factura factura =
                 obtenerFacturaPropia(id, correoCliente);
 
-        String xml = factura.getXmlGenerado();
+        String xmlOriginal = factura.getXmlGenerado();
 
-        if (xml == null || xml.isBlank()) {
+        if (xmlOriginal == null || xmlOriginal.isBlank()) {
             throw new IllegalArgumentException(
                     "La factura no tiene un XML generado"
             );
         }
 
-        // Validar nuevamente antes de enviarlo a DGTD
-        if (!xmlValidator.validarXml(xml)) {
+        // El XSD se valida contra el comprobante original. Si la factura ya fue
+        // firmada y validada por HSM, Mini Tributación recibe el XML firmado.
+        if (!xmlValidator.validarXml(xmlOriginal)) {
             throw new IllegalArgumentException(
                     "El XML de la factura no cumple el esquema XSD y no puede enviarse"
             );
         }
 
+        String xmlParaEnvio = factura.isFirmaValida()
+                && factura.getXmlFirmado() != null
+                && !factura.getXmlFirmado().isBlank()
+                ? factura.getXmlFirmado()
+                : xmlOriginal;
+
         DgtdClient.DgtdResult result =
-                dgtdClient.enviar(factura, xml);
+                dgtdClient.enviar(factura, xmlParaEnvio);
 
         EnvioFactura envio = new EnvioFactura();
 
@@ -340,6 +419,17 @@ public class FacturaServiceImpl implements FacturaService {
         String digitos = valor.replaceAll("\\D", "");
         if (digitos.length() > 4) digitos = digitos.substring(digitos.length() - 4);
         return digitos.isBlank() ? null : digitos;
+    }
+
+    private String normalizarIdentificacion(String identificacion) {
+        if (identificacion == null) return "";
+        return identificacion.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+    }
+
+    private String limpiarDatoFirma(String valor, int max) {
+        if (valor == null || valor.isBlank()) return null;
+        String limpio = valor.trim();
+        return limpio.length() <= max ? limpio : limpio.substring(0, max);
     }
 
     private void validarCoherenciaTotales(FacturaRequest request) {

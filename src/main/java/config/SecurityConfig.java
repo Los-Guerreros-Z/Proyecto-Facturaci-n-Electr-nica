@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/index.html", "/app.js", "/bankyCheckout.js", "/styles.css", "/favicon.ico").permitAll()
+                        .requestMatchers("/", "/index.html", "/app.js", "/bankyCheckout.js", "/hsmSignCheckout.js", "/styles.css", "/favicon.ico").permitAll()
                         .requestMatchers("/api/v1/auth/**", "/api/v1/health", "/api/v1/config/public", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/h2-console/**").permitAll()
                         .anyRequest().authenticated()
                 )

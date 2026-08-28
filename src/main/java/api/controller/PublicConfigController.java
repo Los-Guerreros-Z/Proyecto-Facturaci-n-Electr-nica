@@ -18,19 +18,22 @@ public class PublicConfigController {
     private final String bankyMerchantId;
     private final String bankyCurrency;
     private final String facturaBonitaUrl;
+    private final String hsmUrl;
 
     public PublicConfigController(
             @Value("${integraciones.modo:SIMULADO}") String integracionesModo,
             @Value("${integraciones.banky-url:https://bankyfinanzas.netlify.app}") String bankyUrl,
             @Value("${integraciones.banky-merchant-id:}") String bankyMerchantId,
             @Value("${integraciones.banky-currency:CRC}") String bankyCurrency,
-            @Value("${integraciones.factura-bonita-url:https://proyecto-kn7p.onrender.com}") String facturaBonitaUrl
+            @Value("${integraciones.factura-bonita-url:https://proyecto-kn7p.onrender.com}") String facturaBonitaUrl,
+            @Value("${integraciones.hsm-url:https://hsm-sign-cr.onrender.com}") String hsmUrl
     ) {
         this.integracionesModo = integracionesModo;
         this.bankyUrl = bankyUrl;
         this.bankyMerchantId = bankyMerchantId;
         this.bankyCurrency = bankyCurrency;
         this.facturaBonitaUrl = facturaBonitaUrl;
+        this.hsmUrl = hsmUrl;
     }
 
     @GetMapping("/public")
@@ -42,6 +45,8 @@ public class PublicConfigController {
         body.put("bankyCurrency", bankyCurrency);
         body.put("bankyConfigurado", bankyMerchantId != null && !bankyMerchantId.isBlank());
         body.put("facturaBonitaConfigurada", facturaBonitaUrl != null && !facturaBonitaUrl.isBlank());
+        body.put("hsmUrl", hsmUrl);
+        body.put("hsmConfigurado", hsmUrl != null && !hsmUrl.isBlank());
         return ResponseEntity.ok(body);
     }
 }

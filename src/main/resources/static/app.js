@@ -1,4 +1,5 @@
 import { pagarConBanky, describirResultado } from './bankyCheckout.js';
+import { firmarConHSMSignCR, describirResultadoFirma } from './hsmSignCheckout.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -79,6 +80,10 @@ async function loadPublicConfig() {
       $('#facturaBonitaState').textContent = 'ACTIVA';
       $('#facturaBonitaState').className = 'integration-state ok';
     }
+    if (configPublica.hsmConfigurado) {
+      $('#hsmState').textContent = 'ACTIVO';
+      $('#hsmState').className = 'integration-state ok';
+    }
   } catch (_) {}
 }
 
@@ -154,11 +159,29 @@ async function openInvoice(id) {
       ? '<button class="primary-button inline" disabled>Factura pagada ✓</button>'
       : '<button class="primary-button inline" id="payBanky">Pagar con Banky</button>';
 
+    const botonFirma = f.firmaValida
+      ? '<button class="primary-button inline" disabled>Firma HSM válida ✓</button>'
+      : (f.xmlValido ? '<button class="primary-button inline" id="signHsm">Firmar con HSM</button>' : '');
+
+    const firmaDetalle = f.firmaValida ? `
+      <div class="payment-summary">
+        <span class="kicker">FIRMA DIGITAL HSM SIGN CR</span>
+        <div class="detail-grid">
+          <div><small>Validación</small><strong class="payment-ok">VÁLIDA ✓</strong></div>
+          <div><small>Firmante</small><strong>${escapeHtml(f.firmanteNombre || '—')}</strong></div>
+          <div><small>Identificación</small><strong>${escapeHtml(f.firmanteIdentificacion || '—')}</strong></div>
+          <div><small>Certificado</small><strong>${escapeHtml(f.estadoCertificado || '—')}</strong></div>
+          <div><small>Algoritmo</small><strong>${escapeHtml(f.algoritmoFirma || '—')}</strong></div>
+          <div><small>Fecha firma</small><strong>${escapeHtml(f.fechaFirmaHsm || '—')}</strong></div>
+        </div>
+      </div>` : '';
+
     $('#invoiceDialogBody').innerHTML = `
       <span class="kicker">DETALLE DE FACTURA</span><h2>${escapeHtml(f.id)}</h2>
-      <div class="detail-grid"><div><small>Receptor</small><strong>${escapeHtml(f.receptor || '—')}</strong></div><div><small>Total</small><strong>${money(f.totalComprobante, f.moneda)}</strong></div><div><small>Estado factura</small><strong>${escapeHtml(f.estado)}</strong></div><div><small>Estado pago</small><strong class="state ${paymentClass(f.estadoPago)}">${escapeHtml(f.estadoPago || 'PENDIENTE')}</strong></div><div><small>XML</small><strong>${f.xmlValido ? 'Válido' : 'Pendiente'}</strong></div></div>
+      <div class="detail-grid"><div><small>Receptor</small><strong>${escapeHtml(f.receptor || '—')}</strong></div><div><small>Total</small><strong>${money(f.totalComprobante, f.moneda)}</strong></div><div><small>Estado factura</small><strong>${escapeHtml(f.estado)}</strong></div><div><small>Estado pago</small><strong class="state ${paymentClass(f.estadoPago)}">${escapeHtml(f.estadoPago || 'PENDIENTE')}</strong></div><div><small>XML</small><strong>${f.xmlValido ? 'Válido' : 'Pendiente'}</strong></div><div><small>Firma HSM</small><strong>${f.firmaValida ? 'Válida ✓' : 'Pendiente'}</strong></div></div>
+      ${firmaDetalle}
       ${pagoDetalle}
-      <div class="dialog-actions"><button class="secondary-button" id="viewXml">Ver XML</button><button class="secondary-button" id="downloadPdf">PDF local</button><button class="pretty-button" id="downloadPrettyPdf">Factura bonita PDF</button><button class="secondary-button" id="viewPrettyHtml">Vista bonita</button>${botonPago}<button class="primary-button inline" id="sendDgtd">Enviar DGTD</button></div>
+      <div class="dialog-actions"><button class="secondary-button" id="viewXml">Ver XML</button><button class="secondary-button" id="downloadPdf">PDF local</button><button class="pretty-button" id="downloadPrettyPdf">Factura bonita PDF</button><button class="secondary-button" id="viewPrettyHtml">Vista bonita</button>${botonFirma}${botonPago}<button class="primary-button inline" id="sendDgtd">Enviar DGTD</button></div>
       <h4>Historial de envíos</h4>
       <div class="history-list">${envios.length ? envios.map(e => `<div><span class="state ${statusClass(e.estado)}">${escapeHtml(e.estado)}</span><strong>${escapeHtml(e.numeroAcuse || 'Sin acuse')}</strong><small>${escapeHtml(e.mensajeRespuesta || '')}</small></div>`).join('') : '<p class="muted">Sin envíos registrados.</p>'}</div>`;
     $('#invoiceDialog').showModal();
@@ -166,9 +189,65 @@ async function openInvoice(id) {
     $('#downloadPdf').onclick = () => downloadPdf(id);
     $('#downloadPrettyPdf').onclick = () => downloadPrettyPdf(id);
     $('#viewPrettyHtml').onclick = () => openPrettyHtml(id);
+    if (!f.firmaValida && f.xmlValido) $('#signHsm').onclick = () => firmarFacturaConHsm(f);
     if (!pagoRealizado) $('#payBanky').onclick = () => pagarFacturaConBanky(f);
     $('#sendDgtd').onclick = async () => { try { const r=await request(`/api/v1/facturas/${encodeURIComponent(id)}/enviar`,{method:'POST'}); showMessage(`DGTD: ${r.estado}${r.numeroAcuse ? ' · '+r.numeroAcuse : ''}`,'success'); $('#invoiceDialog').close(); await loadInvoices(); } catch(e){showMessage(e.message,'error');} };
   } catch (e) { showMessage(e.message,'error'); }
+}
+
+async function firmarFacturaConHsm(factura) {
+  try {
+    await loadPublicConfig();
+    if (!configPublica.hsmConfigurado) {
+      throw new Error('HSM Sign CR todavía no está configurado.');
+    }
+    if (!clienteActual?.numeroIdentificacion) {
+      throw new Error('Tu cuenta no tiene una identificación disponible para la firma.');
+    }
+
+    const xmlFactura = await request(
+      `/api/v1/facturas/${encodeURIComponent(factura.id)}/xml`,
+      {},
+      'text'
+    );
+
+    showMessage('Abriendo HSM Sign CR. El PIN se ingresa únicamente en la ventana de firma.', 'info');
+
+    const resultado = await firmarConHSMSignCR({
+      identificacion: clienteActual.numeroIdentificacion,
+      xmlFactura
+    }, configPublica);
+
+    if (resultado?.status !== 'completed') {
+      showMessage(
+        describirResultadoFirma(resultado),
+        resultado?.status === 'rejected' ? 'error' : 'info'
+      );
+      return;
+    }
+
+    const actualizada = await request(
+      `/api/v1/facturas/${encodeURIComponent(factura.id)}/firma-hsm`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          xmlFirmado: resultado.xmlFirmado,
+          hashDocumento: resultado.hashDocumento || null,
+          serialCertificado: resultado.serialCertificado || null
+        })
+      }
+    );
+
+    showMessage(
+      `Firma validada por HSM Sign CR. Factura ${actualizada.id} marcada como FIRMADA.`,
+      'success'
+    );
+    $('#invoiceDialog').close();
+    await loadInvoices();
+    await openInvoice(actualizada.id);
+  } catch (e) {
+    showMessage(e.message, 'error');
+  }
 }
 
 async function pagarFacturaConBanky(factura) {

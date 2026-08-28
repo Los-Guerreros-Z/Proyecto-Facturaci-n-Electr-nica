@@ -3,6 +3,7 @@ package application.service;
 import application.dto.EnvioResponse;
 import application.dto.FacturaRequest;
 import application.dto.FacturaResponse;
+import application.dto.FirmaHsmRequest;
 import application.dto.PagoBankyRequest;
 
 import java.util.List;
@@ -18,4 +19,5 @@ public interface FacturaService {
     EnvioResponse enviarADgtd(String id, String correoCliente);
     List<EnvioResponse> obtenerEnvios(String id, String correoCliente);
     FacturaResponse registrarPagoBanky(String id, PagoBankyRequest request, String correoCliente);
+    FacturaResponse registrarFirmaHsm(String id, FirmaHsmRequest request, String correoCliente);
 }

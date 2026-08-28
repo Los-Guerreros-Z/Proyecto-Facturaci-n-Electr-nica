@@ -1,30 +1,40 @@
-# Integraciones con otros módulos del curso
+# Estado de integraciones con otros módulos del curso
 
-## 1. Firma digital y cifrado
+## 1. Firma digital — HSM Sign CR
 
-La firma/cifrado **no se implementa dentro de este proyecto** porque corresponde al módulo del otro grupo. `FirmaDigitalClient` mantiene aislado el punto de integración.
+La integración de firma digital ya está incorporada.
 
-- `SIMULADO`: permite completar el flujo local sin afirmar que existe una firma oficial.
-- `REAL`: queda preparado para conectar `FIRMA_API_URL` cuando el grupo responsable entregue su contrato REST definitivo.
-- Antes de activar `REAL` se deben confirmar: URL, método HTTP, JSON de entrada, JSON de salida, autenticación, manejo de errores y formato del XML firmado.
+- Servicio configurado por defecto: `https://hsm-sign-cr.onrender.com`.
+- El PIN se captura únicamente dentro del popup de HSM Sign CR; FacturaSmart no lo solicita ni lo almacena.
+- Endpoint propio: `POST /api/v1/facturas/{id}/firma-hsm`.
+- FacturaSmart conserva el XML original, recibe el XML firmado, comprueba que corresponde al comprobante original y vuelve a validar la firma contra HSM antes de marcar la factura como `FIRMADA`.
+- Variable de entorno: `HSM_SIGN_URL`.
 
-No se debe inventar ese contrato ni acoplar el proyecto a una firma ficticia.
+Consulte `docs/INTEGRACION_HSM_SIGN_CR.md`.
 
-## 2. DGTD / Mini Tributación
+## 2. DGTD / Mini Tributación Directa
 
-`DgtdClient` permite probar aceptación y rechazo sin depender del servicio externo.
+`DgtdClient` conserva el modo simulado para pruebas existentes y ya incluye la integración real con Mini Tributación Directa.
 
-- IDs normales -> aceptación simulada con acuse `SIM-*`.
-- IDs que comienzan con `RECHAZO-` -> rechazo controlado de laboratorio.
-- En `REAL`, `DGTD_API_URL` será la dirección que entregue el grupo responsable.
-
-El sistema guarda estado, código de respuesta, mensaje, acuse y modo de integración.
-
-## 3. BankyFinanzas / backend compartido
-
-Se agregó el checkout suministrado para el proyecto, adaptado para que no utilice el comercio de otro grupo.
+- Backend: `https://mini-tributacion-backend.onrender.com`.
+- Endpoint externo utilizado: `POST /api/facturas`.
+- Endpoint propio de FacturaSmart: `POST /api/v1/facturas/{id}/enviar`.
+- En modo `REAL` se envían los datos de la factura y `archivoXML`.
+- Cuando existe una firma HSM válida, se envía el XML firmado.
+- FacturaSmart guarda estado, código de respuesta, mensaje, número de acuse y modo de integración.
 
 Variables:
+
+```text
+INTEGRACIONES_MODO=SIMULADO|REAL
+DGTD_API_URL=https://mini-tributacion-backend.onrender.com
+```
+
+El valor predeterminado continúa siendo `SIMULADO` para no alterar las pruebas y flujos anteriores. Para consumir Mini Tributación real se debe usar `INTEGRACIONES_MODO=REAL`.
+
+## 3. BankyFinanzas
+
+La integración existente se conserva sin cambios funcionales en esta entrega.
 
 ```text
 BANKY_URL=https://bankyfinanzas.netlify.app
@@ -32,18 +42,19 @@ BANKY_MERCHANT_ID=<ID DEL COMERCIO DE ESTE GRUPO>
 BANKY_CURRENCY=CRC
 ```
 
-El frontend consulta `/api/v1/config/public` y solo habilita un cobro real cuando existe `BANKY_MERCHANT_ID`. La integración valida `event.origin`, procesa `completed`, `rejected` y `cancelled`, y no recibe número completo de tarjeta ni CVV.
+## 4. Factura Bonita
 
-## 4. Validador XML
+La integración existente con Factura Bonita se conserva sin cambios funcionales en esta entrega.
 
-La validación local usa `src/main/resources/xsd/factura-electronica-4.3-base.xsd` en tres momentos:
+```text
+FACTURA_BONITA_URL=https://proyecto-kn7p.onrender.com
+FACTURA_BONITA_ORIGEN=facturasmart
+```
 
-1. al generar la factura;
-2. al consultar el XML;
-3. antes de enviar a DGTD.
+## 5. Validador XML
 
-El XSD incluido sigue siendo **base de laboratorio**. Debe sustituirse/ajustarse al XSD 4.3 final acordado por el profesor y los grupos antes de declarar compatibilidad oficial.
+La validación local sigue usando `src/main/resources/xsd/factura-electronica-4.3-base.xsd`. El XSD incluido continúa siendo una base de laboratorio y no debe presentarse como el XSD oficial completo de Hacienda.
 
-## 5. Integración con ParkSmart
+## 6. ParkSmart
 
-Se deja fuera de esta entrega intermedia para no interferir con los cambios que todavía realizan los compañeros. La integración posterior debe hacerse únicamente a través de la API REST de Facturación, sin acceso directo a su base de datos.
+ParkSmart queda como la integración pendiente siguiente. Debe consumir FacturaSmart mediante API REST y no mediante acceso directo a la base de datos.

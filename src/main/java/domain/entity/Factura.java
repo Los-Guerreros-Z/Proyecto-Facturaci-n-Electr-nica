@@ -88,6 +88,35 @@ public class Factura {
     @Column(name = "xml_generado", columnDefinition = "TEXT")
     private String xmlGenerado;
 
+    @Column(name = "xml_firmado", columnDefinition = "TEXT")
+    private String xmlFirmado;
+
+    // Nullable para permitir actualización de bases con facturas preexistentes.
+    // En el dominio, null se interpreta como false.
+    @Column(name = "firma_valida")
+    private Boolean firmaValida = false;
+
+    @Column(name = "hash_documento", length = 180)
+    private String hashDocumento;
+
+    @Column(name = "serial_certificado", length = 180)
+    private String serialCertificado;
+
+    @Column(name = "firmante_identificacion", length = 80)
+    private String firmanteIdentificacion;
+
+    @Column(name = "firmante_nombre", length = 200)
+    private String firmanteNombre;
+
+    @Column(name = "algoritmo_firma", length = 120)
+    private String algoritmoFirma;
+
+    @Column(name = "estado_certificado", length = 80)
+    private String estadoCertificado;
+
+    @Column(name = "fecha_firma_hsm", length = 120)
+    private String fechaFirmaHsm;
+
     @Column(nullable = false)
     private boolean xmlValido;
 
@@ -284,6 +313,78 @@ public class Factura {
 
     public void setXmlGenerado(String xmlGenerado) {
         this.xmlGenerado = xmlGenerado;
+    }
+
+    public String getXmlFirmado() {
+        return xmlFirmado;
+    }
+
+    public void setXmlFirmado(String xmlFirmado) {
+        this.xmlFirmado = xmlFirmado;
+    }
+
+    public boolean isFirmaValida() {
+        return Boolean.TRUE.equals(firmaValida);
+    }
+
+    public void setFirmaValida(boolean firmaValida) {
+        this.firmaValida = firmaValida;
+    }
+
+    public String getHashDocumento() {
+        return hashDocumento;
+    }
+
+    public void setHashDocumento(String hashDocumento) {
+        this.hashDocumento = hashDocumento;
+    }
+
+    public String getSerialCertificado() {
+        return serialCertificado;
+    }
+
+    public void setSerialCertificado(String serialCertificado) {
+        this.serialCertificado = serialCertificado;
+    }
+
+    public String getFirmanteIdentificacion() {
+        return firmanteIdentificacion;
+    }
+
+    public void setFirmanteIdentificacion(String firmanteIdentificacion) {
+        this.firmanteIdentificacion = firmanteIdentificacion;
+    }
+
+    public String getFirmanteNombre() {
+        return firmanteNombre;
+    }
+
+    public void setFirmanteNombre(String firmanteNombre) {
+        this.firmanteNombre = firmanteNombre;
+    }
+
+    public String getAlgoritmoFirma() {
+        return algoritmoFirma;
+    }
+
+    public void setAlgoritmoFirma(String algoritmoFirma) {
+        this.algoritmoFirma = algoritmoFirma;
+    }
+
+    public String getEstadoCertificado() {
+        return estadoCertificado;
+    }
+
+    public void setEstadoCertificado(String estadoCertificado) {
+        this.estadoCertificado = estadoCertificado;
+    }
+
+    public String getFechaFirmaHsm() {
+        return fechaFirmaHsm;
+    }
+
+    public void setFechaFirmaHsm(String fechaFirmaHsm) {
+        this.fechaFirmaHsm = fechaFirmaHsm;
     }
 
     public boolean isXmlValido() {

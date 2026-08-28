@@ -3,6 +3,7 @@ package api.controller;
 import application.dto.EnvioResponse;
 import application.dto.FacturaRequest;
 import application.dto.FacturaResponse;
+import application.dto.FirmaHsmRequest;
 import application.dto.PagoBankyRequest;
 import application.service.FacturaService;
 import jakarta.validation.Valid;
@@ -65,6 +66,17 @@ public class FacturaController {
                 .body(facturaService.obtenerHtmlBonito(id, auth.getName()));
     }
 
+
+    @PostMapping("/{id}/firma-hsm")
+    public ResponseEntity<FacturaResponse> registrarFirmaHsm(
+            @PathVariable String id,
+            @Valid @RequestBody FirmaHsmRequest request,
+            Authentication auth
+    ) {
+        return ResponseEntity.ok(
+                facturaService.registrarFirmaHsm(id, request, auth.getName())
+        );
+    }
 
     @PostMapping("/{id}/pago-banky")
     public ResponseEntity<FacturaResponse> registrarPagoBanky(
