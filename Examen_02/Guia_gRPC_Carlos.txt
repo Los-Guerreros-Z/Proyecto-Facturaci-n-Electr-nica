@@ -1,0 +1,53 @@
+GUÍA RÁPIDA DE gRPC — DEMOSTRACIÓN DE CARLOS
+
+1. Preparar el proyecto
+Descomprimí el ZIP y abrí PowerShell en Parcial02-grpc-trpc, donde está package.json.
+Usá Node.js 20.19 o superior. Instalá las dependencias para tu equipo:
+    node --version
+    npm.cmd ci
+
+El ZIP incluye el archivo .env. El servidor y el cliente usan DEMO_USER y
+DEMO_PASSWORD para iniciar sesión, y el servidor exige un JWT_SECRET de al
+menos 32 caracteres. Mantené ese archivo privado.
+
+2. Levantar el servidor en memoria (terminal 1)
+    $env:DATA_SOURCE = "memory"
+    npm.cmd run grpc:server
+Dejá abierta la terminal cuando aparezca «Fuente de datos: memory».
+
+3. Ejecutar la demo (terminal 2, en la misma carpeta)
+    npm.cmd run grpc:client | Tee-Object -FilePath ".\evidencias\grpc_memoria_prueba.txt"
+
+El cliente obtiene un JWT, lista productos, selecciona ID, nombre y precio,
+filtra hasta 90 y muestra las categorías. Luego crea y actualiza un monitor,
+consulta tres productos ordenados por precio descendente, elimina el monitor
+y comprueba que una consulta sin token sea rechazada.
+
+4. Repetir con MongoDB
+En la terminal 1, detené el servidor anterior con Ctrl+C. Asegurate de que
+MongoDB local esté activo. Si no lo tenés corriendo y usás Docker Desktop,
+podés iniciarlo una vez con este comando:
+    docker run -d --name parcial02-mongo -p 127.0.0.1:27017:27017 mongodb/mongodb-community-server:latest
+
+En la terminal 1, cargá los datos iniciales y arrancá gRPC en modo MongoDB:
+    $env:MONGO_URI = "mongodb://127.0.0.1:27017"
+    $env:MONGO_DB = "parcial02_grpc"
+    $env:DATA_SOURCE = "mongodb"
+    npm.cmd run mongo:seed
+    npm.cmd run grpc:server
+
+Cuando aparezca «Fuente de datos: mongodb», ejecutá en la terminal 2:
+    npm.cmd run grpc:client | Tee-Object -FilePath ".\evidencias\grpc_mongodb_prueba.txt"
+
+En ambos modos, buscá «Demostracion gRPC finalizada correctamente».
+Si aparece EADDRINUSE, cerrá con Ctrl+C la instancia anterior que usa el
+puerto 50051 y volvé a iniciar el servidor.
+
+Archivos clave
+- proto/catalogo.proto define los métodos y sus mensajes.
+- src/grpc/server.ts valida el JWT y usa el repositorio elegido.
+- src/grpc/client.ts ejecuta todas las pruebas en orden.
+- src/data/seed.ts carga productos y categorías iniciales en MongoDB.
+
+Referencia para Docker
+https://www.mongodb.com/docs/v8.0/tutorial/install-mongodb-community-with-docker/

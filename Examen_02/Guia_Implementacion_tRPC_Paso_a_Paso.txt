@@ -1,0 +1,2654 @@
+﻿====================================================================================================
+                               UNIVERSIDAD TÉCNICA NACIONAL
+                                   SEDE DEL PACÍFICO
+                         INGENIERÍA EN TECNOLOGÍAS DE INFORMACIÓN
+                    ITI-621 - TECNOLOGÍAS Y SISTEMAS WEB III
+====================================================================================================
+DOCUMENTO........: Guía paso a paso de implementación tRPC
+PERIODO..........: III Cuatrimestre 2026
+ACTIVIDAD........: Segunda Prueba Parcial - Examen 02
+TECNOLOGÍA......: tRPC + TypeScript + Node.js + MongoDB
+BASE DE DATOS....: Dataset Northwind (8 categorías, 29 proveedores, 77 productos)
+ALCANCE.........: Solamente la implementación tRPC; gRPC corresponde al otro integrante.
+ORIGEN..........: Guía elaborada a partir de «GraphQL implementation.txt» del profesor
+                  y de los archivos reales del proyecto Examen02-tRPC-corregido.
+
+PROPÓSITO
+Reconstruir y explicar el desarrollo completo de tRPC, desde el inicio del proyecto hasta
+la validación con datos en memoria y MongoDB. Se usa la secuencia didáctica de la guía
+GraphQL: instalar herramientas, crear datos, definir tipos, implementar operaciones,
+configurar la base de datos, añadir seguridad, probar y obtener evidencias.
+
+IMPORTANTE
+- Esta guía describe la versión final del proyecto que se probó en PowerShell.
+- Las salidas de pruebas mostradas como «esperadas» deben reproducirse en el equipo.
+- Los archivos de código íntegros están en el ANEXO, para copiar sin omitir fragmentos.
+- Para recrear el proyecto es necesario copiar también data/northwind.json (anexo completo).
+- No compartir el contenido real de .env ni claves, hashes o tokens completos.
+====================================================================================================
+
+HERRAMIENTAS NECESARIAS
+----------------------------------------------------------------------------------------------------
+1. Node.js 24.x / npm (la instalación probada usó Node.js v24.22.1).
+2. Visual Studio Code.
+3. Windows PowerShell (sin ejecutar como administrador).
+4. MongoDB Community Server, disponible localmente para las pruebas con persistencia.
+5. MongoDB Compass (opcional, para visualizar las colecciones).
+6. Git (recomendado para versionar el trabajo).
+7. Dependencias del proyecto: @trpc/server, @trpc/client, zod, mongoose,
+   bcryptjs, jsonwebtoken, dotenv, typescript, tsx y tipos de Node/JWT.
+
+REFERENCIA DIDÁCTICA DEL PROFESOR
+- GraphQL: Apollo Server + typeDefs + resolvers + MongoDB.
+- tRPC: createHTTPServer + appRouter + procedures + repositorios + MongoDB.
+- Se conserva el mismo modelo: categorías, productos y proveedores.
+- Las consultas no se escriben en lenguaje GraphQL; se invocan métodos tipados desde un cliente TS.
+----------------------------------------------------------------------------------------------------
+
+====================================================================================================
+PASO 01 - ABRIR POWERSHELL Y ELEGIR UNA CARPETA DE TRABAJO
+====================================================================================================
+Abrir PowerShell o el terminal integrado de Visual Studio Code.
+Para construir el proyecto de forma independiente:
+
+    Set-Location "E:\UTN\WEB III"
+    New-Item -ItemType Directory -Force -Path "Examen02-tRPC"
+    Set-Location ".\Examen02-tRPC"
+
+IMPORTANTE: actualmente la copia funcional comprobada está en:
+    E:\UTN\WEB III\Examen02-tRPC-corregido\Examen02-tRPC
+Si solo se desea ejecutar o documentar esa copia, NO hay que crear un proyecto nuevo.
+No borrar ni reemplazar la implementación gRPC del compañero.
+
+====================================================================================================
+PASO 02 - COMPROBAR LAS HERRAMIENTAS
+====================================================================================================
+En PowerShell:
+
+    node --version
+    npm --version
+    git --version
+
+Las versiones reportadas por el estudiante incluyeron Node.js v24.22.1.
+Si un comando no se reconoce, revisar primero la instalación y la variable PATH.
+
+====================================================================================================
+PASO 03 - INICIALIZAR NPM Y MÓDULOS ES
+====================================================================================================
+En la raíz de un proyecto NUEVO:
+
+    npm init -y
+    npm pkg set "type=module"
+
+Con ello se genera package.json; "type": "module" habilita import/export.
+El proyecto final incluye dependencias y scripts adicionales: copiar el contenido
+COMPLETO de package.json desde el ANEXO A y luego ejecutar:
+
+    npm install
+
+No ejecutar el mismo paso en una copia que ya tiene correctamente instalado npm.
+Durante el desarrollo surgió un error ETARGET por una versión antigua del paquete;
+la versión corregida de package.json es la utilizada en este documento.
+
+====================================================================================================
+PASO 04 - CREAR LA ESTRUCTURA DE CARPETAS
+====================================================================================================
+Ejecutar en PowerShell, dentro de un proyecto nuevo:
+
+    New-Item -ItemType Directory -Force -Path "src", "src\client", "src\server", "src\repositories"
+    New-Item -ItemType Directory -Force -Path "scripts", "data", "capturas"
+
+Estructura de la versión final:
+
+    Examen02-tRPC/
+      package.json
+      tsconfig.json
+      .gitignore
+      .env.example
+      .env                 (se genera localmente; no subir a Git)
+      data/northwind.json
+      scripts/configurar.ts
+      scripts/verificar-datos.ts
+      scripts/sembrar-mongo.ts
+      src/types.ts
+      src/data.ts
+      src/repositories/memoria.ts
+      src/repositories/mongo.ts
+      src/server/auth.ts
+      src/server/context.ts
+      src/server/router.ts
+      src/server/index.ts
+      src/client/pruebas.ts
+      capturas/
+
+Ver todos los archivos con:
+
+    Get-ChildItem -Recurse -File | Where-Object FullName -NotMatch 'node_modules' 
+
+====================================================================================================
+PASO 05 - CONFIGURAR TYPESCRIPT Y LOS SCRIPTS
+====================================================================================================
+Crear tsconfig.json (código completo en ANEXO B).
+Se utiliza target ES2022, module y moduleResolution NodeNext, strict true y "types": ["node"].
+La propiedad noEmit verifica los tipos sin generar archivos JavaScript.
+
+Los scripts npm reales se encuentran en package.json:
+
+    npm run setup          crea la configuración local .env
+    npm run check          verifica TypeScript sin compilar archivos
+    npm run check:data     comprueba datos y CRUD en memoria
+    npm run start:trpc     ejecuta el servidor
+    npm run dev:trpc       servidor con recarga automática
+    npm run test:trpc      ejecuta cliente y pruebas A-G
+    npm run seed:mongo     inserta datos Northwind ausentes en MongoDB
+
+Ver scripts:
+
+    npm pkg get scripts 
+
+====================================================================================================
+PASO 06 - CREAR EL ARCHIVO DE DATOS NORTHWIND
+====================================================================================================
+En la práctica GraphQL, el profesor empleó data/_db.js con arreglos de categorías,
+proveedores y productos (ver su Paso 04).
+
+En el proyecto tRPC se convirtió a JSON de datos:
+
+    data/northwind.json
+
+El archivo tiene tres claves de primer nivel:
+
+    { "categories": [...], "suppliers": [...], "products": [...] }
+
+Los registros incluyen, entre otros:
+  CategoryID, CategoryName, Description;
+  SupplierID, CompanyName, ContactName, Country;
+  ProductID, ProductName, SupplierID, CategoryID, UnitPrice, UnitsInStock.
+
+Los datos son 8 categorías, 29 proveedores y 77 productos; el JSON íntegro se incluye
+en el ANEXO C. No se incluyen contraseñas ni conexiones del ejercicio GraphQL.
+
+Crear src/data.ts (código íntegro en ANEXO D) para cargar el JSON con readFileSync.
+
+====================================================================================================
+PASO 07 - CREAR LAS INTERFACES Y EL CONTRATO DE REPOSITORIO
+====================================================================================================
+Crear src/types.ts (ANEXO E).
+Definir interfaces TypeScript:
+
+    Categoria
+    Proveedor
+    Producto
+    DatosNorthwind
+
+Además, la interfaz Repositorio especifica los métodos que deben cumplir
+la versión en memoria y la versión MongoDB:
+
+    categorias(), proveedores(), productos(), productoPorId(id)
+    insertar(producto), modificar(id, cambios), eliminar(id)
+
+La interfaz es una separación de responsabilidades: los procedimientos tRPC
+no necesitan saber si los datos provienen de arreglos o de MongoDB.
+
+====================================================================================================
+PASO 08 - IMPLEMENTAR EL REPOSITORIO DE DATOS EN MEMORIA
+====================================================================================================
+Crear src/repositories/memoria.ts (ANEXO F).
+La clase RepositorioMemoria utiliza structuredClone() de los datos iniciales.
+Los cambios realizados al insertar, actualizar o eliminar solo viven en memoria;
+al reiniciar el servidor, los arreglos originales se recuperan desde el JSON.
+
+Métodos principales:
+  productos()      retorna arreglo clonado
+  productoPorId()  busca un ProductID
+  insertar()       comprueba ID duplicado y añade producto
+  modificar()      actualiza campos permitidos
+  eliminar()       extrae el producto de la lista
+
+Los métodos son async para compartir contrato con la implementación MongoDB.
+
+====================================================================================================
+PASO 09 - IMPLEMENTAR EL REPOSITORIO MONGODB
+====================================================================================================
+Crear src/repositories/mongo.ts (ANEXO G).
+Usar mongoose.Schema para definir las colecciones:
+
+    categories (CategoryID único)
+    suppliers (SupplierID único)
+    products (ProductID único)
+
+Crear la clase RepositorioMongo que implementa los mismos métodos del repositorio
+en memoria. Ejemplos de funciones Mongoose usadas:
+
+    Modelo.find().lean()
+    Modelo.findOne({ ProductID: id }).lean()
+    Modelo.create(producto)
+    Modelo.findOneAndUpdate(...)
+    Modelo.findOneAndDelete(...)
+
+NOTA TÉCNICA: en esta versión, los joins, la agregación y la paginación se realizan
+en TypeScript sobre los registros obtenidos del repositorio; NO se ejecuta $lookup ni
+un pipeline aggregate nativo de MongoDB. Esta distinción debe quedar clara en el PDF.
+
+====================================================================================================
+PASO 10 - CONFIGURAR VARIABLES DE ENTORNO
+====================================================================================================
+Crear .env.example (ANEXO H) con nombres de variables, sin credenciales reales.
+Crear scripts/configurar.ts (ANEXO I).
+
+En la raíz, ejecutar:
+
+    npm run setup
+
+El comando crea .env solo si no existe, con:
+  DB_MODE=memory
+  PORT=4317
+  MONGO_URI=mongodb://127.0.0.1:27017/examen02_trpc
+  DEMO_EMAIL=demo@local.test
+  DEMO_PASSWORD_HASH=[hash bcrypt]
+  DEMO_PASSWORD_CLIENT=[clave de la prueba local]
+  JWT_SECRET=[secreto aleatorio]
+
+En el código de demostración la contraseña local es Demo12345!, solo para laboratorio.
+No copiar la contraseña de muestra a sistemas productivos. No publicar .env.
+
+====================================================================================================
+PASO 11 - IMPLEMENTAR JWT Y CONTRASEÑAS CON HASH
+====================================================================================================
+Crear src/server/auth.ts (ANEXO J).
+Se usan jsonwebtoken y bcryptjs:
+
+1. autenticar(email, password) comprueba correo y hash bcrypt.
+2. Si las credenciales son correctas, se firma un JWT de una hora.
+3. usuarioDesdeToken() analiza el encabezado Authorization: Bearer <token>.
+4. jwt.verify valida firma, algoritmo HS256, issuer y usuario del laboratorio.
+5. Si el token falta o no es válido, el usuario del contexto queda null.
+
+Esta demostración utiliza UNA identidad local con rol admin; no administra un padrón
+de usuarios en MongoDB ni implementa permisos de varios roles.
+
+====================================================================================================
+PASO 12 - CREAR EL CONTEXTO TRPC
+====================================================================================================
+Crear src/server/context.ts (ANEXO K).
+La función construirContexto(repo) proporciona a cada procedimiento:
+
+    ctx.repo    repositorio en uso (memoria o MongoDB)
+    ctx.usuario usuario leído del JWT o null
+
+La inyección de dependencias permite reutilizar el mismo appRouter para ambos motores.
+
+====================================================================================================
+PASO 13 - INICIALIZAR EL ROUTER Y VALIDAR ENTRADAS CON ZOD
+====================================================================================================
+Crear src/server/router.ts (ANEXO L).
+
+Primero inicializar tRPC usando el tipo Contexto:
+
+    const t = initTRPC.context<Contexto>().create();
+    const publico = t.procedure;
+
+Crear middleware protegido para operaciones de escritura:
+
+    const protegido = t.procedure.use(({ ctx, next }) => {
+      if (!ctx.usuario) throw new TRPCError({ code: "UNAUTHORIZED", ... });
+      return next({ ctx: { usuario: ctx.usuario } });
+    });
+
+Definir esquemas Zod: ID entero positivo, nombres requeridos, precios >= 0,
+stock >= 0, campos permitidos para seleccionar y ordenar, etc.
+
+Diferencia con GraphQL: no se escribe un esquema typeDefs en SDL ni resolvers
+Apollo. Los routers definen los procedimientos y el cliente infiere sus tipos.
+
+====================================================================================================
+PASO 14 - IMPLEMENTAR CONSULTAS GENERALES (A) Y CAMPOS ESPECÍFICOS (B)
+====================================================================================================
+En src/server/router.ts definir:
+
+    productos.todos  (query pública: devuelve productos)
+    productos.uno    (query por ProductID)
+    productos.campos (query con lista de campos permitidos)
+
+Ejemplo de petición tRPC del cliente:
+
+    cliente.productos.todos.query()
+
+Para elegir tres campos:
+
+    cliente.productos.campos.query({
+      campos: ["ProductID", "ProductName", "UnitPrice"]
+    })
+
+Resultado verificado en las pruebas: 77 productos; proyección de los tres campos.
+
+====================================================================================================
+PASO 15 - IMPLEMENTAR FILTROS (C)
+====================================================================================================
+Definir procedimiento productos.filtrar con Zod.
+Filtros admitidos: categoriaId, proveedorId, nombre, precioMinimo, precioMaximo.
+Evitar rangos inválidos cuando precioMinimo supera precioMaximo.
+
+Petición ejecutada por el cliente:
+
+    cliente.productos.filtrar.query({ categoriaId: 1, precioMinimo: 15 })
+
+Resultado observado en la ejecución: 8 productos coincidentes en el conjunto inicial.
+
+====================================================================================================
+PASO 16 - IMPLEMENTAR RELACIONES Y AGREGACIONES (D)
+====================================================================================================
+Definir dos procedimientos públicos:
+
+    productos.relaciones
+    productos.agregacion
+
+RELACIONES: consultar listas de productos, categorías y proveedores; crear mapas
+por CategoryID y SupplierID; añadir a cada producto Categoria y Proveedor.
+Esto reproduce el objetivo del JOIN del profesor, pero desde la lógica de Node.js.
+
+AGREGACIONES: para cada categoría calcular:
+    totalProductos = cantidad de productos asociados
+    precioPromedio = suma de precios / totalProductos
+
+Resultado observado: resumen de las ocho categorías; por ejemplo, Beverages:
+12 productos y precio promedio 37.98 (sobre el dataset usado).
+
+====================================================================================================
+PASO 17 - IMPLEMENTAR PAGINACIÓN Y ORDENAMIENTO (F)
+====================================================================================================
+Definir productos.paginar con entradas:
+
+    pagina (>=1), limite (1..100), ordenarPor, direccion (asc/desc)
+
+El procedimiento ordena el arreglo y calcula:
+    inicio = (pagina - 1) * limite
+    resultados = ordenados.slice(inicio, inicio + limite)
+    totalPaginas = Math.ceil(total / limite)
+
+Petición del cliente:
+
+    cliente.productos.paginar.query({
+      pagina: 1, limite: 5, ordenarPor: "UnitPrice", direccion: "desc"
+    })
+
+Resultado observado: total 77, totalPaginas 16 y cinco productos del precio
+más alto al más bajo.
+
+====================================================================================================
+PASO 18 - IMPLEMENTAR CRUD PROTEGIDO (E + G)
+====================================================================================================
+En el router definir tres mutaciones protegidas por JWT:
+
+    productos.crear
+    productos.actualizar
+    productos.eliminar
+
+Antes de insertar, comprobar que CategoryID y SupplierID existan.
+Validar campos con Zod y rechazar ID duplicado con CONFLICT.
+Al actualizar, comprobar existencia y permitir cambios parciales sin modificar ProductID.
+Al eliminar, comprobar existencia, devolver el registro eliminado y verificar
+luego la búsqueda por ID: debe retornar null.
+
+El cliente realiza estas acciones sobre un ID de prueba generado dinámicamente,
+y elimina su producto al terminar; no borra los datos base de Northwind.
+La autorización se comprueba antes de mutar: sin JWT se espera UNAUTHORIZED.
+
+====================================================================================================
+PASO 19 - IMPLEMENTAR AUTH.LOGIN Y AUTH.PERFIL
+====================================================================================================
+En el mismo router definir:
+
+    auth.login  : mutation pública, recibe email y password;
+                  devuelve token y usuario si son correctos.
+    auth.perfil : query protegida; exige JWT válido y devuelve el perfil.
+
+El cliente añade Authorization: Bearer <token> a las solicitudes autenticadas.
+La salida de prueba G1 muestra "UNAUTHORIZED (esperado)" y la G2 muestra
+"tokenGenerado": true, sin imprimir el token completo.
+
+====================================================================================================
+PASO 20 - CREAR E INICIAR EL SERVIDOR HTTP TRPC
+====================================================================================================
+Crear src/server/index.ts (ANEXO M).
+El archivo:
+  1. Carga dotenv/config.
+  2. Lee DB_MODE.
+  3. Si DB_MODE=memory crea RepositorioMemoria.
+  4. Si DB_MODE=mongo establece conexión y crea RepositorioMongo.
+  5. Crea servidor con createHTTPServer({ router, createContext }).
+  6. Escucha en 127.0.0.1 y puerto 4317 por defecto.
+
+En una terminal PowerShell:
+
+    npm run start:trpc
+
+Salida en memoria:
+    Servidor tRPC listo | modo=memory | http://127.0.0.1:4317
+
+El acceso a http://127.0.0.1:4317/ no ofrece una página web;
+para ver JSON simple usar http://127.0.0.1:4317/productos.todos
+No abrir dos servidores en el mismo puerto.
+
+====================================================================================================
+PASO 21 - CREAR EL CLIENTE DE PRUEBAS A-G
+====================================================================================================
+Crear src/client/pruebas.ts (ANEXO N).
+El cliente utiliza createTRPCClient<AppRouter> y httpBatchLink.
+El tipo AppRouter se importa como "type", sin compilar un cliente por separado.
+
+Orden real de las pruebas en este proyecto:
+ A: consultar todos
+ B: campos específicos
+ C: filtros
+ D1: relaciones
+ D2: agregaciones
+ F: paginación y ordenamiento
+ G1: rechazo de una mutación sin JWT
+ G2: login JWT y perfil protegido
+ E1: insertar producto
+ E2: modificar producto
+ E3: eliminar y comprobar null
+
+Las pruebas incluyen assert() para fallar si los datos no cumplen el resultado esperado.
+No son solo impresiones en pantalla; verifican condiciones de forma programática.
+
+====================================================================================================
+PASO 22 - PREPARAR Y VERIFICAR LOS DATOS DE MEMORIA
+====================================================================================================
+Crear scripts/verificar-datos.ts (ANEXO O).
+
+En PowerShell, una vez instalado el proyecto:
+
+    npm run setup
+    npm run check
+    npm run check:data
+
+Salida VERIFICADA por el estudiante:
+
+    OK: datos Northwind validados y CRUD en memoria verificado (8/29/77).
+
+Esta comprobación valida los conteos, claves únicas, referencias y CRUD
+sin necesidad de iniciar el servidor HTTP.
+
+====================================================================================================
+PASO 23 - EJECUTAR LAS INTERACCIONES CON DATOS EN MEMORIA
+====================================================================================================
+En .env establecer:
+
+    DB_MODE=memory
+
+Abrir DOS terminales en el directorio del proyecto.
+Terminal 1:
+
+    npm run start:trpc
+
+Terminal 2:
+
+    npm run test:trpc
+
+Si todo es correcto, el cliente termina con:
+
+    TODAS LAS PRUEBAS tRPC FINALIZARON CORRECTAMENTE.
+
+El estudiante ya confirmó esta salida con datos en memoria.
+Para guardar la salida en Windows PowerShell:
+
+    New-Item -ItemType Directory -Force -Path ".\capturas"
+    npm run test:trpc | Tee-Object -FilePath ".\capturas\pruebas-memoria.txt"
+
+Los avisos «npm notice» pueden aparecer por stderr y no implican fallo de tRPC.
+
+====================================================================================================
+PASO 24 - ACTIVAR MONGODB Y SEMBRAR LOS REGISTROS
+====================================================================================================
+Detener el servidor del paso anterior con Ctrl + C.
+Comprobar disponibilidad de un servicio escuchando en el puerto 27017:
+
+    Test-NetConnection -ComputerName 127.0.0.1 -Port 27017
+
+En el archivo .env cambiar SOLAMENTE:
+
+    DB_MODE=mongo
+
+Conservar MONGO_URI apuntando a la base local dedicada:
+
+    MONGO_URI=mongodb://127.0.0.1:27017/examen02_trpc
+
+Crear scripts/sembrar-mongo.ts (ANEXO P). Solo utiliza base examen02_trpc y
+operaciones upsert con $setOnInsert para insertar registros faltantes, sin eliminar
+ni sobrescribir documentos existentes.
+
+Ejecutar:
+
+    npm run seed:mongo
+
+SALIDA VERIFICADA por el estudiante:
+
+    MongoDB listo: categorias=8, proveedores=29, productos=77
+    Los registros existentes se conservaron; solo se insertaron los ausentes.
+
+La conexión abierta en el puerto 27017 por sí sola no basta para probar MongoDB;
+el resultado del script seed:mongo confirma la operación sobre la base.
+
+====================================================================================================
+PASO 25 - EJECUTAR Y COMPROBAR TRPC SOBRE MONGODB
+====================================================================================================
+Terminal 1, con DB_MODE=mongo:
+
+    npm run start:trpc
+
+SALIDA VERIFICADA:
+    Servidor tRPC listo | modo=mongo | http://127.0.0.1:4317
+
+Terminal 2:
+
+    npm run test:trpc
+
+SALIDA VERIFICADA:
+    TODAS LAS PRUEBAS tRPC FINALIZARON CORRECTAMENTE.
+
+Las respuestas vistas incluyen 77 productos, ocho categorías en la agregación,
+JOIN con categoría/proveedor, paginación 77/16, JWT y CRUD completo.
+La prueba crea un producto temporal con ID de prueba y lo elimina al final.
+
+Para guardar salida:
+
+    npm run test:trpc | Tee-Object -FilePath ".\capturas\pruebas-mongodb.txt"
+
+ADVERTENCIA observada de Mongoose:
+  "the `new` option for findOneAndUpdate() is deprecated"
+No impidió completar el CRUD. Para mantenimiento futuro se podría sustituir
+{ new: true } por { returnDocument: "after" } tras verificar las pruebas.
+
+====================================================================================================
+PASO 26 - VISUALIZAR COLECCIONES CON MONGODB COMPASS (OPCIONAL)
+====================================================================================================
+Abrir MongoDB Compass y conectarse a la instancia configurada.
+Seleccionar la base examen02_trpc, y localizar las colecciones:
+
+    categories
+    suppliers
+    products
+
+Confirmar cantidades iniciales: 8, 29 y 77, respectivamente.
+Tomar captura sin mostrar cadenas de conexión que incluyan credenciales.
+No importar nuevamente el JSON si seed:mongo ya cargó los datos correctamente.
+
+====================================================================================================
+PASO 27 - OBTENER LAS CAPTURAS SOLICITADAS DEL TEMA TRPC
+====================================================================================================
+Crear evidencias con Win + Shift + S y guardar en la carpeta de capturas.
+Usar PowerShell y/o abrir el TXT de salida para ubicar cada encabezado de prueba.
+
+CAPTURAS SUGERIDAS PARA TU PARTE DEL EXAMEN:
+  01-instalacion.png         npm ls --depth=0 y npm run check
+  02-datos.png               npm run check:data y resultado 8/29/77
+  03-servidor-memoria.png    inicio modo=memory
+  04-todos-memoria.png       PRUEBA A: 77 productos
+  05-campos-memoria.png      PRUEBA B: tres campos
+  06-filtros-memoria.png     PRUEBA C: filtro de categoría y precio
+  07-relaciones-memoria.png PRUEBA D1: categoría y proveedor
+  08-agregacion-memoria.png PRUEBA D2: total/mean por categoría
+  09-paginacion-memoria.png PRUEBA F: cinco resultados / total 16 páginas
+  10-jwt-rechazado.png       PRUEBA G1: UNAUTHORIZED esperado
+  11-jwt-autorizado.png      PRUEBA G2: login y perfil
+  12-insertar-memoria.png    PRUEBA E1
+  13-modificar-memoria.png  PRUEBA E2
+  14-eliminar-memoria.png   PRUEBA E3 y verificacion null
+  15-semilla-mongodb.png    npm run seed:mongo con conteos
+  16-servidor-mongo.png      inicio modo=mongo
+  17-colecciones-mongo.png  MongoDB Compass (si se utiliza)
+  18-pruebas-mongo.png       salida de pruebas A-G (capturas por secciones)
+  19-final-mongo.png         TODAS LAS PRUEBAS... en MongoDB
+
+IMPORTANTE: para máxima cobertura de la rúbrica, repetir en modo MongoDB las
+capturas 04 a 14 (cada interacción) y rotularlas -mongo.png.
+Las capturas deben ser de ejecuciones REALES. No ocultar errores deliberadamente,
+pero sí evitar exponer credenciales y tokens.
+Si las pruebas imprimen demasiadas líneas, guardar el TXT con Tee-Object,
+abrirlo en Visual Studio Code y capturar cada sección, identificando su comando.
+
+====================================================================================================
+PASO 28 - PREPARAR LA ENTREGA Y VERSIONAR CÓDIGO CON GIT
+====================================================================================================
+Crear .gitignore (ANEXO Q) para excluir .env, node_modules y logs.
+En una copia NUEVA sin repositorio Git, opcionalmente ejecutar:
+
+    git init
+    git add package.json tsconfig.json .gitignore .env.example src scripts data README.md
+    git status
+    git commit -m "feat: implementar API tRPC con memoria MongoDB y JWT"
+
+Si alguno de esos archivos no existe, omitirlo de git add.
+Este proyecto excluye por defecto imágenes de capturas de Git. Las capturas
+se entregan como archivos adjuntos o dentro de la carpeta de evidencias del PDF;
+no se debe publicar .env.
+
+Se debe integrar la parte gRPC del compañero únicamente en el documento final,
+sin alterar esta implementación de tRPC.
+
+====================================================================================================
+PASO 29 - PROBLEMAS CONOCIDOS Y DIAGNÓSTICO
+====================================================================================================
+1. npm ETARGET (versión de paquete inexistente o no disponible en registro):
+   usar el package.json corregido y luego npm install.
+2. 'tsx' o 'tsc' no se reconoce:
+   npm install no concluyó. Corregir primero la instalación; no instalar globalmente.
+3. Cannot find name process o node:process:
+   comprobar @types/node y tsconfig.json "types": ["node"]; luego npm run check.
+4. EADDRINUSE 127.0.0.1:4317:
+   hay otra aplicación escuchando; cerrar la instancia propia antes de reiniciar.
+5. ECONNREFUSED 127.0.0.1:4317:
+   iniciar el servidor en una terminal antes de ejecutar el cliente.
+6. No procedure found on path "":
+   la raíz / no tiene procedimiento. Usar /productos.todos o el cliente.
+7. "new" de Mongoose está deprecado:
+   es advertencia no bloqueante; planificar cambio a returnDocument: "after".
+8. Nombres acentuados como "C├┤te":
+   revisar la codificación UTF-8 en terminal o archivo; MongoDB devolvió
+   correctamente "Côte de Blaye" y "Thüringer Rostbratwurst".
+9. PowerShell NativeCommandError al usar *>&1 con npm:
+   npm escribe avisos en stderr; para capturar la salida estándar usar
+   npm run test:trpc | Tee-Object -FilePath .\capturas\pruebas-trpc.txt.
+10. Error al cambiar DB_MODE mientras el servidor sigue vivo:
+    cerrar servidor con Ctrl + C y volver a iniciarlo para leer el .env actualizado.
+
+====================================================================================================
+PASO 30 - CONCLUSIONES PARA LA PRUEBA PARCIAL
+====================================================================================================
+Se construyó una API tRPC con TypeScript y Node.js que trabaja con el dataset
+Northwind de la práctica previa de GraphQL. La capa de comunicación tRPC usa
+procedimientos tipados validados con Zod. El mismo router sirve los datos desde
+arreglos en memoria o colecciones MongoDB, seleccionados por DB_MODE.
+
+Se probaron consultas totales, selección de campos, filtros, relaciones lógicas,
+agregaciones en Node.js, CRUD de productos, paginación/ordenamiento y autenticación
+mediante JWT. Las pruebas A-G terminaron correctamente en memoria y en MongoDB.
+
+Comparación resumida para el docente:
+  REST     : API de recursos y métodos HTTP.
+  GraphQL  : API de consultas y mutaciones descrita por un esquema GraphQL.
+  gRPC     : servicios RPC con contratos Protocol Buffers (parte del compañero).
+  tRPC     : procedimientos RPC y tipos inferidos entre cliente/servidor TypeScript.
+
+Ni gRPC ni tRPC dependen exclusivamente de MongoDB. La base de datos es una
+decisión de la implementación del backend. En este proyecto se demostraron
+dos modos: memoria y MongoDB.
+
+LIMITACIONES DECLARADAS: autenticación solo con un usuario de laboratorio;
+no hay control multirol completo ni consultas optimizadas por índices, agregación
+MongoDB o $lookup a nivel de motor. Son simplificaciones explícitas de esta demo.
+
+FIN DE LA GUÍA PRINCIPAL.
+
+====================================================================================================
+ANEXOS - CÓDIGO EXACTO DE LA VERSIÓN FINAL
+====================================================================================================
+Los archivos siguientes fueron extraídos del ZIP Examen02-tRPC-corregido que corresponde
+al proyecto probado. En un proyecto reconstruido, copiar cada bloque en la ruta indicada.
+No se adjunta el archivo .env real, ya que se genera localmente y contiene secretos.
+
+====================================================================================================
+ANEXO A - package.json
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+{
+  "name": "examen02-trpc",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "setup": "tsx scripts/configurar.ts",
+    "dev:trpc": "tsx watch src/server/index.ts",
+    "start:trpc": "tsx src/server/index.ts",
+    "test:trpc": "tsx src/client/pruebas.ts",
+    "check": "tsc --noEmit",
+    "seed:mongo": "tsx scripts/sembrar-mongo.ts",
+    "check:data": "tsx scripts/verificar-datos.ts"
+  },
+  "dependencies": {
+    "@trpc/client": "11.29.4",
+    "@trpc/server": "11.29.4",
+    "bcryptjs": "3.0.3",
+    "dotenv": "18.0.10",
+    "jsonwebtoken": "9.0.3",
+    "mongoose": "9.2.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
+
+FIN DEL ARCHIVO: package.json
+
+====================================================================================================
+ANEXO B - tsconfig.json
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+}
+
+FIN DEL ARCHIVO: tsconfig.json
+
+====================================================================================================
+ANEXO C - data/northwind.json
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+{
+  "categories": [
+    {
+      "CategoryID": 1,
+      "CategoryName": "Beverages",
+      "Description": "Soft drinks, coffees, teas, beers, and ales"
+    },
+    {
+      "CategoryID": 2,
+      "CategoryName": "Condiments",
+      "Description": "Sweet and savory sauces, relishes, spreads, and seasonings"
+    },
+    {
+      "CategoryID": 3,
+      "CategoryName": "Confections",
+      "Description": "Desserts, candies, and sweet breads"
+    },
+    {
+      "CategoryID": 4,
+      "CategoryName": "Dairy Products",
+      "Description": "Cheeses"
+    },
+    {
+      "CategoryID": 5,
+      "CategoryName": "Grains/Cereals",
+      "Description": "Breads, crackers, pasta, and cereal"
+    },
+    {
+      "CategoryID": 6,
+      "CategoryName": "Meat/Poultry",
+      "Description": "Prepared meats"
+    },
+    {
+      "CategoryID": 7,
+      "CategoryName": "Produce",
+      "Description": "Dried fruit and bean curd"
+    },
+    {
+      "CategoryID": 8,
+      "CategoryName": "Seafood",
+      "Description": "Seaweed and fish"
+    }
+  ],
+  "products": [
+    {
+      "ProductID": 1,
+      "ProductName": "Chai",
+      "SupplierID": 1,
+      "CategoryID": 1,
+      "QuantityPerUnit": "10 boxes x 20 bags",
+      "UnitPrice": 18,
+      "UnitsInStock": 39,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 2,
+      "ProductName": "Chang",
+      "SupplierID": 1,
+      "CategoryID": 1,
+      "QuantityPerUnit": "24 - 12 oz bottles",
+      "UnitPrice": 19,
+      "UnitsInStock": 17,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 3,
+      "ProductName": "Aniseed Syrup",
+      "SupplierID": 1,
+      "CategoryID": 2,
+      "QuantityPerUnit": "12 - 550 ml bottles",
+      "UnitPrice": 10,
+      "UnitsInStock": 13,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 4,
+      "ProductName": "Chef Anton's Cajun Seasoning",
+      "SupplierID": 2,
+      "CategoryID": 2,
+      "QuantityPerUnit": "48 - 6 oz jars",
+      "UnitPrice": 22,
+      "UnitsInStock": 53,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 5,
+      "ProductName": "Chef Anton's Gumbo Mix",
+      "SupplierID": 2,
+      "CategoryID": 2,
+      "QuantityPerUnit": "36 boxes",
+      "UnitPrice": 21.35,
+      "UnitsInStock": 0,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 6,
+      "ProductName": "Grandma's Boysenberry Spread",
+      "SupplierID": 3,
+      "CategoryID": 2,
+      "QuantityPerUnit": "12 - 8 oz jars",
+      "UnitPrice": 25,
+      "UnitsInStock": 120,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 7,
+      "ProductName": "Uncle Bob's Organic Dried Pears",
+      "SupplierID": 3,
+      "CategoryID": 7,
+      "QuantityPerUnit": "12 - 1 lb pkgs.",
+      "UnitPrice": 30,
+      "UnitsInStock": 15,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 8,
+      "ProductName": "Northwoods Cranberry Sauce",
+      "SupplierID": 3,
+      "CategoryID": 2,
+      "QuantityPerUnit": "12 - 12 oz jars",
+      "UnitPrice": 40,
+      "UnitsInStock": 6,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 9,
+      "ProductName": "Mishi Kobe Niku",
+      "SupplierID": 4,
+      "CategoryID": 6,
+      "QuantityPerUnit": "18 - 500 g pkgs.",
+      "UnitPrice": 97,
+      "UnitsInStock": 29,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 10,
+      "ProductName": "Ikura",
+      "SupplierID": 4,
+      "CategoryID": 8,
+      "QuantityPerUnit": "12 - 200 ml jars",
+      "UnitPrice": 31,
+      "UnitsInStock": 31,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 11,
+      "ProductName": "Queso Cabrales",
+      "SupplierID": 5,
+      "CategoryID": 4,
+      "QuantityPerUnit": "1 kg pkg.",
+      "UnitPrice": 21,
+      "UnitsInStock": 22,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 12,
+      "ProductName": "Queso Manchego La Pastora",
+      "SupplierID": 5,
+      "CategoryID": 4,
+      "QuantityPerUnit": "10 - 500 g pkgs.",
+      "UnitPrice": 38,
+      "UnitsInStock": 86,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 13,
+      "ProductName": "Konbu",
+      "SupplierID": 6,
+      "CategoryID": 8,
+      "QuantityPerUnit": "2 kg box",
+      "UnitPrice": 6,
+      "UnitsInStock": 24,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 14,
+      "ProductName": "Tofu",
+      "SupplierID": 6,
+      "CategoryID": 7,
+      "QuantityPerUnit": "40 - 100 g pkgs.",
+      "UnitPrice": 23.25,
+      "UnitsInStock": 35,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 15,
+      "ProductName": "Genen Shouyu",
+      "SupplierID": 6,
+      "CategoryID": 2,
+      "QuantityPerUnit": "24 - 250 ml bottles",
+      "UnitPrice": 15.5,
+      "UnitsInStock": 39,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 16,
+      "ProductName": "Pavlova",
+      "SupplierID": 7,
+      "CategoryID": 3,
+      "QuantityPerUnit": "32 - 500 g boxes",
+      "UnitPrice": 17.45,
+      "UnitsInStock": 29,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 17,
+      "ProductName": "Alice Mutton",
+      "SupplierID": 7,
+      "CategoryID": 6,
+      "QuantityPerUnit": "20 - 1 kg tins",
+      "UnitPrice": 39,
+      "UnitsInStock": 0,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 18,
+      "ProductName": "Carnarvon Tigers",
+      "SupplierID": 7,
+      "CategoryID": 8,
+      "QuantityPerUnit": "16 kg pkg.",
+      "UnitPrice": 62.5,
+      "UnitsInStock": 42,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 19,
+      "ProductName": "Teatime Chocolate Biscuits",
+      "SupplierID": 8,
+      "CategoryID": 3,
+      "QuantityPerUnit": "10 boxes x 12 pieces",
+      "UnitPrice": 9.2,
+      "UnitsInStock": 25,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 20,
+      "ProductName": "Sir Rodney's Marmalade",
+      "SupplierID": 8,
+      "CategoryID": 3,
+      "QuantityPerUnit": "30 gift boxes",
+      "UnitPrice": 81,
+      "UnitsInStock": 40,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 21,
+      "ProductName": "Sir Rodney's Scones",
+      "SupplierID": 8,
+      "CategoryID": 3,
+      "QuantityPerUnit": "24 pkgs. x 4 pieces",
+      "UnitPrice": 10,
+      "UnitsInStock": 3,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 22,
+      "ProductName": "Gustaf's Knäckebröd",
+      "SupplierID": 9,
+      "CategoryID": 5,
+      "QuantityPerUnit": "24 - 500 g pkgs.",
+      "UnitPrice": 21,
+      "UnitsInStock": 104,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 23,
+      "ProductName": "Tunnbröd",
+      "SupplierID": 9,
+      "CategoryID": 5,
+      "QuantityPerUnit": "12 - 250 g pkgs.",
+      "UnitPrice": 9,
+      "UnitsInStock": 61,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 24,
+      "ProductName": "Guaraná Fantástica",
+      "SupplierID": 10,
+      "CategoryID": 1,
+      "QuantityPerUnit": "12 - 355 ml cans",
+      "UnitPrice": 4.5,
+      "UnitsInStock": 20,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 25,
+      "ProductName": "NuNuCa Nuß-Nougat-Creme",
+      "SupplierID": 11,
+      "CategoryID": 3,
+      "QuantityPerUnit": "20 - 450 g glasses",
+      "UnitPrice": 14,
+      "UnitsInStock": 76,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 26,
+      "ProductName": "Gumbär Gummibärchen",
+      "SupplierID": 11,
+      "CategoryID": 3,
+      "QuantityPerUnit": "100 - 250 g bags",
+      "UnitPrice": 31.23,
+      "UnitsInStock": 15,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 27,
+      "ProductName": "Schoggi Schokolade",
+      "SupplierID": 11,
+      "CategoryID": 3,
+      "QuantityPerUnit": "100 - 100 g pieces",
+      "UnitPrice": 43.9,
+      "UnitsInStock": 49,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 28,
+      "ProductName": "Rössle Sauerkraut",
+      "SupplierID": 12,
+      "CategoryID": 7,
+      "QuantityPerUnit": "25 - 825 g cans",
+      "UnitPrice": 45.6,
+      "UnitsInStock": 26,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 29,
+      "ProductName": "Thüringer Rostbratwurst",
+      "SupplierID": 12,
+      "CategoryID": 6,
+      "QuantityPerUnit": "50 bags x 30 sausgs.",
+      "UnitPrice": 123.79,
+      "UnitsInStock": 0,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 30,
+      "ProductName": "Nord-Ost Matjeshering",
+      "SupplierID": 13,
+      "CategoryID": 8,
+      "QuantityPerUnit": "10 - 200 g glasses",
+      "UnitPrice": 25.89,
+      "UnitsInStock": 10,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 31,
+      "ProductName": "Gorgonzola Telino",
+      "SupplierID": 14,
+      "CategoryID": 4,
+      "QuantityPerUnit": "12 - 100 g pkgs",
+      "UnitPrice": 12.5,
+      "UnitsInStock": 0,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 32,
+      "ProductName": "Mascarpone Fabioli",
+      "SupplierID": 14,
+      "CategoryID": 4,
+      "QuantityPerUnit": "24 - 200 g pkgs.",
+      "UnitPrice": 32,
+      "UnitsInStock": 9,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 33,
+      "ProductName": "Geitost",
+      "SupplierID": 15,
+      "CategoryID": 4,
+      "QuantityPerUnit": "500 g",
+      "UnitPrice": 2.5,
+      "UnitsInStock": 112,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 34,
+      "ProductName": "Sasquatch Ale",
+      "SupplierID": 16,
+      "CategoryID": 1,
+      "QuantityPerUnit": "24 - 12 oz bottles",
+      "UnitPrice": 14,
+      "UnitsInStock": 111,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 35,
+      "ProductName": "Steeleye Stout",
+      "SupplierID": 16,
+      "CategoryID": 1,
+      "QuantityPerUnit": "24 - 12 oz bottles",
+      "UnitPrice": 18,
+      "UnitsInStock": 20,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 36,
+      "ProductName": "Inlagd Sill",
+      "SupplierID": 17,
+      "CategoryID": 8,
+      "QuantityPerUnit": "24 - 250 g  jars",
+      "UnitPrice": 19,
+      "UnitsInStock": 112,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 37,
+      "ProductName": "Gravad lax",
+      "SupplierID": 17,
+      "CategoryID": 8,
+      "QuantityPerUnit": "12 - 500 g pkgs.",
+      "UnitPrice": 26,
+      "UnitsInStock": 11,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 38,
+      "ProductName": "Côte de Blaye",
+      "SupplierID": 18,
+      "CategoryID": 1,
+      "QuantityPerUnit": "12 - 75 cl bottles",
+      "UnitPrice": 263.5,
+      "UnitsInStock": 17,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 39,
+      "ProductName": "Chartreuse verte",
+      "SupplierID": 18,
+      "CategoryID": 1,
+      "QuantityPerUnit": "750 cc per bottle",
+      "UnitPrice": 18,
+      "UnitsInStock": 69,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 40,
+      "ProductName": "Boston Crab Meat",
+      "SupplierID": 19,
+      "CategoryID": 8,
+      "QuantityPerUnit": "24 - 4 oz tins",
+      "UnitPrice": 18.4,
+      "UnitsInStock": 123,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 41,
+      "ProductName": "Jack's New England Clam Chowder",
+      "SupplierID": 19,
+      "CategoryID": 8,
+      "QuantityPerUnit": "12 - 12 oz cans",
+      "UnitPrice": 9.65,
+      "UnitsInStock": 85,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 42,
+      "ProductName": "Singaporean Hokkien Fried Mee",
+      "SupplierID": 20,
+      "CategoryID": 5,
+      "QuantityPerUnit": "32 - 1 kg pkgs.",
+      "UnitPrice": 14,
+      "UnitsInStock": 26,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 43,
+      "ProductName": "Ipoh Coffee",
+      "SupplierID": 20,
+      "CategoryID": 1,
+      "QuantityPerUnit": "16 - 500 g tins",
+      "UnitPrice": 46,
+      "UnitsInStock": 17,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 44,
+      "ProductName": "Gula Malacca",
+      "SupplierID": 20,
+      "CategoryID": 2,
+      "QuantityPerUnit": "20 - 2 kg bags",
+      "UnitPrice": 19.45,
+      "UnitsInStock": 27,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 45,
+      "ProductName": "Røgede sild",
+      "SupplierID": 21,
+      "CategoryID": 8,
+      "QuantityPerUnit": "1k pkg.",
+      "UnitPrice": 9.5,
+      "UnitsInStock": 5,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 46,
+      "ProductName": "Spegesild",
+      "SupplierID": 21,
+      "CategoryID": 8,
+      "QuantityPerUnit": "4 - 450 g glasses",
+      "UnitPrice": 12,
+      "UnitsInStock": 95,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 47,
+      "ProductName": "Zaanse koeken",
+      "SupplierID": 22,
+      "CategoryID": 3,
+      "QuantityPerUnit": "10 - 4 oz boxes",
+      "UnitPrice": 9.5,
+      "UnitsInStock": 36,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 48,
+      "ProductName": "Chocolade",
+      "SupplierID": 22,
+      "CategoryID": 3,
+      "QuantityPerUnit": "10 pkgs.",
+      "UnitPrice": 12.75,
+      "UnitsInStock": 15,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 49,
+      "ProductName": "Maxilaku",
+      "SupplierID": 23,
+      "CategoryID": 3,
+      "QuantityPerUnit": "24 - 50 g pkgs.",
+      "UnitPrice": 20,
+      "UnitsInStock": 10,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 50,
+      "ProductName": "Valkoinen suklaa",
+      "SupplierID": 23,
+      "CategoryID": 3,
+      "QuantityPerUnit": "12 - 100 g bars",
+      "UnitPrice": 16.25,
+      "UnitsInStock": 65,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 51,
+      "ProductName": "Manjimup Dried Apples",
+      "SupplierID": 24,
+      "CategoryID": 7,
+      "QuantityPerUnit": "50 - 300 g pkgs.",
+      "UnitPrice": 53,
+      "UnitsInStock": 20,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 52,
+      "ProductName": "Filo Mix",
+      "SupplierID": 24,
+      "CategoryID": 5,
+      "QuantityPerUnit": "16 - 2 kg boxes",
+      "UnitPrice": 7,
+      "UnitsInStock": 38,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 53,
+      "ProductName": "Perth Pasties",
+      "SupplierID": 24,
+      "CategoryID": 6,
+      "QuantityPerUnit": "48 pieces",
+      "UnitPrice": 32.8,
+      "UnitsInStock": 0,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 54,
+      "ProductName": "Tourtière",
+      "SupplierID": 25,
+      "CategoryID": 6,
+      "QuantityPerUnit": "16 pies",
+      "UnitPrice": 7.45,
+      "UnitsInStock": 21,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 55,
+      "ProductName": "Pâté chinois",
+      "SupplierID": 25,
+      "CategoryID": 6,
+      "QuantityPerUnit": "24 boxes x 2 pies",
+      "UnitPrice": 24,
+      "UnitsInStock": 115,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 56,
+      "ProductName": "Gnocchi di nonna Alice",
+      "SupplierID": 26,
+      "CategoryID": 5,
+      "QuantityPerUnit": "24 - 250 g pkgs.",
+      "UnitPrice": 38,
+      "UnitsInStock": 21,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 57,
+      "ProductName": "Ravioli Angelo",
+      "SupplierID": 26,
+      "CategoryID": 5,
+      "QuantityPerUnit": "24 - 250 g pkgs.",
+      "UnitPrice": 19.5,
+      "UnitsInStock": 36,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 58,
+      "ProductName": "Escargots de Bourgogne",
+      "SupplierID": 27,
+      "CategoryID": 8,
+      "QuantityPerUnit": "24 pieces",
+      "UnitPrice": 13.25,
+      "UnitsInStock": 62,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 59,
+      "ProductName": "Raclette Courdavault",
+      "SupplierID": 28,
+      "CategoryID": 4,
+      "QuantityPerUnit": "5 kg pkg.",
+      "UnitPrice": 55,
+      "UnitsInStock": 79,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 60,
+      "ProductName": "Camembert Pierrot",
+      "SupplierID": 28,
+      "CategoryID": 4,
+      "QuantityPerUnit": "15 - 300 g rounds",
+      "UnitPrice": 34,
+      "UnitsInStock": 19,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 61,
+      "ProductName": "Sirop d'érable",
+      "SupplierID": 29,
+      "CategoryID": 2,
+      "QuantityPerUnit": "24 - 500 ml bottles",
+      "UnitPrice": 28.5,
+      "UnitsInStock": 113,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 62,
+      "ProductName": "Tarte au sucre",
+      "SupplierID": 29,
+      "CategoryID": 3,
+      "QuantityPerUnit": "48 pies",
+      "UnitPrice": 49.3,
+      "UnitsInStock": 17,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 63,
+      "ProductName": "Vegie-spread",
+      "SupplierID": 7,
+      "CategoryID": 2,
+      "QuantityPerUnit": "15 - 625 g jars",
+      "UnitPrice": 43.9,
+      "UnitsInStock": 24,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 64,
+      "ProductName": "Wimmers gute Semmelknödel",
+      "SupplierID": 12,
+      "CategoryID": 5,
+      "QuantityPerUnit": "20 bags x 4 pieces",
+      "UnitPrice": 33.25,
+      "UnitsInStock": 22,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 65,
+      "ProductName": "Louisiana Fiery Hot Pepper Sauce",
+      "SupplierID": 2,
+      "CategoryID": 2,
+      "QuantityPerUnit": "32 - 8 oz bottles",
+      "UnitPrice": 21.05,
+      "UnitsInStock": 76,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 66,
+      "ProductName": "Louisiana Hot Spiced Okra",
+      "SupplierID": 2,
+      "CategoryID": 2,
+      "QuantityPerUnit": "24 - 8 oz jars",
+      "UnitPrice": 17,
+      "UnitsInStock": 4,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 67,
+      "ProductName": "Laughing Lumberjack Lager",
+      "SupplierID": 16,
+      "CategoryID": 1,
+      "QuantityPerUnit": "24 - 12 oz bottles",
+      "UnitPrice": 14,
+      "UnitsInStock": 52,
+      "ReorderLevel": 10
+    },
+    {
+      "ProductID": 68,
+      "ProductName": "Scottish Longbreads",
+      "SupplierID": 8,
+      "CategoryID": 3,
+      "QuantityPerUnit": "10 boxes x 8 pieces",
+      "UnitPrice": 12.5,
+      "UnitsInStock": 6,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 69,
+      "ProductName": "Gudbrandsdalsost",
+      "SupplierID": 15,
+      "CategoryID": 4,
+      "QuantityPerUnit": "10 kg pkg.",
+      "UnitPrice": 36,
+      "UnitsInStock": 26,
+      "ReorderLevel": 15
+    },
+    {
+      "ProductID": 70,
+      "ProductName": "Outback Lager",
+      "SupplierID": 7,
+      "CategoryID": 1,
+      "QuantityPerUnit": "24 - 355 ml bottles",
+      "UnitPrice": 15,
+      "UnitsInStock": 15,
+      "ReorderLevel": 30
+    },
+    {
+      "ProductID": 71,
+      "ProductName": "Fløtemysost",
+      "SupplierID": 15,
+      "CategoryID": 4,
+      "QuantityPerUnit": "10 - 500 g pkgs.",
+      "UnitPrice": 21.5,
+      "UnitsInStock": 26,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 72,
+      "ProductName": "Mozzarella di Giovanni",
+      "SupplierID": 14,
+      "CategoryID": 4,
+      "QuantityPerUnit": "24 - 200 g pkgs.",
+      "UnitPrice": 34.8,
+      "UnitsInStock": 14,
+      "ReorderLevel": 0
+    },
+    {
+      "ProductID": 73,
+      "ProductName": "Röd Kaviar",
+      "SupplierID": 17,
+      "CategoryID": 8,
+      "QuantityPerUnit": "24 - 150 g jars",
+      "UnitPrice": 15,
+      "UnitsInStock": 101,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 74,
+      "ProductName": "Longlife Tofu",
+      "SupplierID": 4,
+      "CategoryID": 7,
+      "QuantityPerUnit": "5 kg pkg.",
+      "UnitPrice": 10,
+      "UnitsInStock": 4,
+      "ReorderLevel": 5
+    },
+    {
+      "ProductID": 75,
+      "ProductName": "Rhönbräu Klosterbier",
+      "SupplierID": 12,
+      "CategoryID": 1,
+      "QuantityPerUnit": "24 - 0.5 l bottles",
+      "UnitPrice": 7.75,
+      "UnitsInStock": 125,
+      "ReorderLevel": 25
+    },
+    {
+      "ProductID": 76,
+      "ProductName": "Lakkalikööri",
+      "SupplierID": 23,
+      "CategoryID": 1,
+      "QuantityPerUnit": "500 ml",
+      "UnitPrice": 18,
+      "UnitsInStock": 57,
+      "ReorderLevel": 20
+    },
+    {
+      "ProductID": 77,
+      "ProductName": "Original Frankfurter grüne Soße",
+      "SupplierID": 12,
+      "CategoryID": 2,
+      "QuantityPerUnit": "12 boxes",
+      "UnitPrice": 13,
+      "UnitsInStock": 32,
+      "ReorderLevel": 15
+    }
+  ],
+  "suppliers": [
+    {
+      "SupplierID": 1,
+      "CompanyName": "Exotic Liquids",
+      "ContactName": "Charlotte Cooper",
+      "ContactTitle": "Purchasing Manager",
+      "Country": "UK",
+      "City": "London",
+      "Address": "49 Gilbert St."
+    },
+    {
+      "SupplierID": 2,
+      "CompanyName": "New Orleans Cajun Delights",
+      "ContactName": "Shelley Burke",
+      "ContactTitle": "Order Administrator",
+      "Country": "USA",
+      "City": "New Orleans",
+      "Address": "P.O. Box 78934"
+    },
+    {
+      "SupplierID": 3,
+      "CompanyName": "Grandma Kelly's Homestead",
+      "ContactName": "Regina Murphy",
+      "ContactTitle": "Sales Representative",
+      "Country": "USA",
+      "City": "Ann Arbor",
+      "Address": "707 Oxford Rd."
+    },
+    {
+      "SupplierID": 4,
+      "CompanyName": "Tokyo Traders",
+      "ContactName": "Yoshi Nagase",
+      "ContactTitle": "Marketing Manager",
+      "Country": "Japan",
+      "City": "Tokyo",
+      "Address": "9-8 Sekimai Musashino-shi"
+    },
+    {
+      "SupplierID": 5,
+      "CompanyName": "Cooperativa de Quesos 'Las Cabras'",
+      "ContactName": "Antonio del Valle Saavedra ",
+      "ContactTitle": "Export Administrator",
+      "Country": "Spain",
+      "City": "Oviedo",
+      "Address": "Calle del Rosal 4"
+    },
+    {
+      "SupplierID": 6,
+      "CompanyName": "Mayumi's",
+      "ContactName": "Mayumi Ohno",
+      "ContactTitle": "Marketing Representative",
+      "Country": "Japan",
+      "City": "Osaka",
+      "Address": "92 Setsuko Chuo-ku"
+    },
+    {
+      "SupplierID": 7,
+      "CompanyName": "Pavlova, Ltd.",
+      "ContactName": "Ian Devling",
+      "ContactTitle": "Marketing Manager",
+      "Country": "Australia",
+      "City": "Melbourne",
+      "Address": "74 Rose St. Moonie Ponds"
+    },
+    {
+      "SupplierID": 8,
+      "CompanyName": "Specialty Biscuits, Ltd.",
+      "ContactName": "Peter Wilson",
+      "ContactTitle": "Sales Representative",
+      "Country": "UK",
+      "City": "Manchester",
+      "Address": "29 King's Way"
+    },
+    {
+      "SupplierID": 9,
+      "CompanyName": "PB Knäckebröd AB",
+      "ContactName": "Lars Peterson",
+      "ContactTitle": "Sales Agent",
+      "Country": "Sweden ",
+      "City": "Göteborg",
+      "Address": "Kaloadagatan 13"
+    },
+    {
+      "SupplierID": 10,
+      "CompanyName": "Refrescos Americanas LTDA",
+      "ContactName": "Carlos Diaz",
+      "ContactTitle": "Marketing Manager",
+      "Country": "Brazil",
+      "City": "São Paulo",
+      "Address": "Av. das Americanas 12.890"
+    },
+    {
+      "SupplierID": 11,
+      "CompanyName": "Heli Süßwaren GmbH & Co. KG",
+      "ContactName": "Petra Winkler",
+      "ContactTitle": "Sales Manager",
+      "Country": "Germany",
+      "City": "Berlin",
+      "Address": "Tiergartenstraße 5"
+    },
+    {
+      "SupplierID": 12,
+      "CompanyName": "Plutzer Lebensmittelgroßmärkte AG",
+      "ContactName": "Martin Bein",
+      "ContactTitle": "International Marketing Mgr.",
+      "Country": "Germany",
+      "City": "Frankfurt",
+      "Address": "Bogenallee 51"
+    },
+    {
+      "SupplierID": 13,
+      "CompanyName": "Nord-Ost-Fisch Handelsgesellschaft mbH",
+      "ContactName": "Sven Petersen",
+      "ContactTitle": "Coordinator Foreign Markets",
+      "Country": "Germany",
+      "City": "Cuxhaven",
+      "Address": "Frahmredder 112a"
+    },
+    {
+      "SupplierID": 14,
+      "CompanyName": "Formaggi Fortini s.r.l.",
+      "ContactName": "Elio Rossi",
+      "ContactTitle": "Sales Representative",
+      "Country": "Italy",
+      "City": "Ravenna",
+      "Address": "Viale Dante, 75"
+    },
+    {
+      "SupplierID": 15,
+      "CompanyName": "Norske Meierier",
+      "ContactName": "Beate Vileid",
+      "ContactTitle": "Marketing Manager",
+      "Country": "Norway",
+      "City": "Sandvika",
+      "Address": "Hatlevegen 5"
+    },
+    {
+      "SupplierID": 16,
+      "CompanyName": "Bigfoot Breweries",
+      "ContactName": "Cheryl Saylor",
+      "ContactTitle": "Regional Account Rep.",
+      "Country": "USA",
+      "City": "Bend",
+      "Address": "3400 - 8th Avenue Suite 210"
+    },
+    {
+      "SupplierID": 17,
+      "CompanyName": "Svensk Sjöföda AB",
+      "ContactName": "Michael Björn",
+      "ContactTitle": "Sales Representative",
+      "Country": "Sweden",
+      "City": "Stockholm",
+      "Address": "Brovallavägen 231"
+    },
+    {
+      "SupplierID": 18,
+      "CompanyName": "Aux joyeux ecclésiastiques",
+      "ContactName": "Guylène Nodier",
+      "ContactTitle": "Sales Manager",
+      "Country": "France",
+      "City": "Paris",
+      "Address": "203, Rue des Francs-Bourgeois"
+    },
+    {
+      "SupplierID": 19,
+      "CompanyName": "New England Seafood Cannery",
+      "ContactName": "Robb Merchant",
+      "ContactTitle": "Wholesale Account Agent",
+      "Country": "USA",
+      "City": "Boston",
+      "Address": "Order Processing Dept. 2100 Paul Revere Blvd."
+    },
+    {
+      "SupplierID": 20,
+      "CompanyName": "Leka Trading",
+      "ContactName": "Chandra Leka",
+      "ContactTitle": "Owner",
+      "Country": "Singapore",
+      "City": "Singapore",
+      "Address": "471 Serangoon Loop, Suite #402"
+    },
+    {
+      "SupplierID": 21,
+      "CompanyName": "Lyngbysild",
+      "ContactName": "Niels Petersen",
+      "ContactTitle": "Sales Manager",
+      "Country": "Denmark",
+      "City": "Lyngby",
+      "Address": "Lyngbysild Fiskebakken 10"
+    },
+    {
+      "SupplierID": 22,
+      "CompanyName": "Zaanse Snoepfabriek",
+      "ContactName": "Dirk Luchte",
+      "ContactTitle": "Accounting Manager",
+      "Country": "Netherlands",
+      "City": "Zaandam",
+      "Address": "Verkoop Rijnweg 22"
+    },
+    {
+      "SupplierID": 23,
+      "CompanyName": "Karkki Oy",
+      "ContactName": "Anne Heikkonen",
+      "ContactTitle": "Product Manager",
+      "Country": "Finland",
+      "City": "Lappeenranta",
+      "Address": "Valtakatu 12"
+    },
+    {
+      "SupplierID": 24,
+      "CompanyName": "G'day, Mate",
+      "ContactName": "Wendy Mackenzie",
+      "ContactTitle": "Sales Representative",
+      "Country": "Australia",
+      "City": "Sydney",
+      "Address": "170 Prince Edward Parade Hunter's Hill"
+    },
+    {
+      "SupplierID": 25,
+      "CompanyName": "Ma Maison",
+      "ContactName": "Jean-Guy Lauzon",
+      "ContactTitle": "Marketing Manager",
+      "Country": "Canada",
+      "City": "Montréal",
+      "Address": "2960 Rue St. Laurent"
+    },
+    {
+      "SupplierID": 26,
+      "CompanyName": "Pasta Buttini s.r.l.",
+      "ContactName": "Giovanni Giudici",
+      "ContactTitle": "Order Administrator",
+      "Country": "Italy",
+      "City": "Salerno",
+      "Address": "Via dei Gelsomini, 153"
+    },
+    {
+      "SupplierID": 27,
+      "CompanyName": "Escargots Nouveaux",
+      "ContactName": "Marie Delamare",
+      "ContactTitle": "Sales Manager",
+      "Country": "France",
+      "City": "Montceau",
+      "Address": "22, rue H. Voiron"
+    },
+    {
+      "SupplierID": 28,
+      "CompanyName": "Gai pâturage",
+      "ContactName": "Eliane Noz",
+      "ContactTitle": "Sales Representative",
+      "Country": "France",
+      "City": "Annecy",
+      "Address": "Bat. B 3, rue des Alpes"
+    },
+    {
+      "SupplierID": 29,
+      "CompanyName": "Forêts d'érables",
+      "ContactName": "Chantal Goulet",
+      "ContactTitle": "Accounting Manager",
+      "Country": "Canada",
+      "City": "Ste-Hyacinthe",
+      "Address": "148 rue Chasseur"
+    }
+  ]
+}
+FIN DEL ARCHIVO: data/northwind.json
+
+====================================================================================================
+ANEXO D - src/data.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import { readFileSync } from "node:fs";
+import type { DatosNorthwind } from "./types.js";
+
+// Archivo tomado de los datos en memoria de Semana 9, sin copiar sus credenciales.
+export const datosIniciales: DatosNorthwind = JSON.parse(
+  readFileSync(new URL("../data/northwind.json", import.meta.url), "utf8")
+) as DatosNorthwind;
+
+FIN DEL ARCHIVO: src/data.ts
+
+====================================================================================================
+ANEXO E - src/types.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+export interface Categoria {
+  CategoryID: number;
+  CategoryName: string;
+  Description: string;
+}
+
+export interface Proveedor {
+  SupplierID: number;
+  CompanyName: string;
+  ContactName: string;
+  ContactTitle: string;
+  Country: string;
+  City: string;
+  Address: string;
+}
+
+export interface Producto {
+  ProductID: number;
+  ProductName: string;
+  SupplierID: number;
+  CategoryID: number;
+  QuantityPerUnit: string;
+  UnitPrice: number;
+  UnitsInStock: number;
+  ReorderLevel: number;
+}
+
+export type NuevoProducto = Producto;
+export type CambioProducto = Partial<Omit<Producto, "ProductID">>;
+
+export interface Repositorio {
+  categorias(): Promise<Categoria[]>;
+  proveedores(): Promise<Proveedor[]>;
+  productos(): Promise<Producto[]>;
+  productoPorId(id: number): Promise<Producto | null>;
+  insertar(producto: NuevoProducto): Promise<Producto>;
+  modificar(id: number, cambios: CambioProducto): Promise<Producto | null>;
+  eliminar(id: number): Promise<Producto | null>;
+}
+
+export interface DatosNorthwind {
+  categories: Categoria[];
+  products: Producto[];
+  suppliers: Proveedor[];
+}
+
+FIN DEL ARCHIVO: src/types.ts
+
+====================================================================================================
+ANEXO F - src/repositories/memoria.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import { datosIniciales } from "../data.js";
+import type { Categoria, Proveedor, Producto, NuevoProducto, CambioProducto, Repositorio } from "../types.js";
+
+export class RepositorioMemoria implements Repositorio {
+  private readonly listaCategorias: Categoria[];
+  private readonly listaProveedores: Proveedor[];
+  private readonly listaProductos: Producto[];
+
+  constructor() {
+    // No se modifica el JSON original; los cambios se pierden al reiniciar.
+    this.listaCategorias = structuredClone(datosIniciales.categories);
+    this.listaProveedores = structuredClone(datosIniciales.suppliers);
+    this.listaProductos = structuredClone(datosIniciales.products);
+  }
+
+  async categorias(): Promise<Categoria[]> { return structuredClone(this.listaCategorias); }
+  async proveedores(): Promise<Proveedor[]> { return structuredClone(this.listaProveedores); }
+  async productos(): Promise<Producto[]> { return structuredClone(this.listaProductos); }
+
+  async productoPorId(id: number): Promise<Producto | null> {
+    const encontrado = this.listaProductos.find((p) => p.ProductID === id);
+    return encontrado ? structuredClone(encontrado) : null;
+  }
+
+  async insertar(producto: NuevoProducto): Promise<Producto> {
+    if (this.listaProductos.some((p) => p.ProductID === producto.ProductID)) {
+      throw new Error("PRODUCTO_DUPLICADO");
+    }
+    this.listaProductos.push(structuredClone(producto));
+    return structuredClone(producto);
+  }
+
+  async modificar(id: number, cambios: CambioProducto): Promise<Producto | null> {
+    const i = this.listaProductos.findIndex((p) => p.ProductID === id);
+    if (i === -1) return null;
+    this.listaProductos[i] = { ...this.listaProductos[i], ...structuredClone(cambios) };
+    return structuredClone(this.listaProductos[i]);
+  }
+
+  async eliminar(id: number): Promise<Producto | null> {
+    const i = this.listaProductos.findIndex((p) => p.ProductID === id);
+    if (i === -1) return null;
+    const [eliminado] = this.listaProductos.splice(i, 1);
+    return structuredClone(eliminado);
+  }
+}
+
+FIN DEL ARCHIVO: src/repositories/memoria.ts
+
+====================================================================================================
+ANEXO G - src/repositories/mongo.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import mongoose, { Schema } from "mongoose";
+import type { Categoria, Proveedor, Producto, NuevoProducto, CambioProducto, Repositorio } from "../types.js";
+import { datosIniciales } from "../data.js";
+
+// Colecciones dedicadas al examen; se exige conexión real cuando DB_MODE=mongo.
+const categoriaSchema = new Schema({
+  CategoryID: { type: Number, required: true, unique: true },
+  CategoryName: { type: String, required: true },
+  Description: { type: String, required: true }
+}, { collection: "categories", versionKey: false });
+
+const proveedorSchema = new Schema({
+  SupplierID: { type: Number, required: true, unique: true },
+  CompanyName: { type: String, required: true },
+  ContactName: { type: String, required: true },
+  ContactTitle: { type: String, required: true },
+  Country: { type: String, required: true },
+  City: { type: String, required: true },
+  Address: { type: String, required: true }
+}, { collection: "suppliers", versionKey: false });
+
+const productoSchema = new Schema({
+  ProductID: { type: Number, required: true, unique: true },
+  ProductName: { type: String, required: true },
+  SupplierID: { type: Number, required: true },
+  CategoryID: { type: Number, required: true },
+  QuantityPerUnit: { type: String, required: true },
+  UnitPrice: { type: Number, required: true, min: 0 },
+  UnitsInStock: { type: Number, required: true, min: 0 },
+  ReorderLevel: { type: Number, required: true, min: 0 }
+}, { collection: "products", versionKey: false });
+
+const CategoriaModel = mongoose.model("ExamenCategoria", categoriaSchema);
+const ProveedorModel = mongoose.model("ExamenProveedor", proveedorSchema);
+const ProductoModel = mongoose.model("ExamenProducto", productoSchema);
+
+function sinMongo<T>(doc: Record<string, unknown> | null): T | null {
+  if (!doc) return null;
+  const { _id, __v, ...campos } = doc;
+  return campos as T;
+}
+
+export class RepositorioMongo implements Repositorio {
+  async categorias(): Promise<Categoria[]> {
+    return (await CategoriaModel.find().sort({ CategoryID: 1 }).lean())
+      .map((d) => sinMongo<Categoria>(d as Record<string, unknown>)!);
+  }
+  async proveedores(): Promise<Proveedor[]> {
+    return (await ProveedorModel.find().sort({ SupplierID: 1 }).lean())
+      .map((d) => sinMongo<Proveedor>(d as Record<string, unknown>)!);
+  }
+  async productos(): Promise<Producto[]> {
+    return (await ProductoModel.find().sort({ ProductID: 1 }).lean())
+      .map((d) => sinMongo<Producto>(d as Record<string, unknown>)!);
+  }
+  async productoPorId(id: number): Promise<Producto | null> {
+    const doc = await ProductoModel.findOne({ ProductID: id }).lean();
+    return sinMongo<Producto>(doc as Record<string, unknown> | null);
+  }
+  async insertar(producto: NuevoProducto): Promise<Producto> {
+    const creado = await ProductoModel.create(producto);
+    return sinMongo<Producto>(creado.toObject() as Record<string, unknown>)!;
+  }
+  async modificar(id: number, cambios: CambioProducto): Promise<Producto | null> {
+    const doc = await ProductoModel.findOneAndUpdate(
+      { ProductID: id }, { $set: cambios }, { new: true, runValidators: true }
+    ).lean();
+    return sinMongo<Producto>(doc as Record<string, unknown> | null);
+  }
+  async eliminar(id: number): Promise<Producto | null> {
+    const doc = await ProductoModel.findOneAndDelete({ ProductID: id }).lean();
+    return sinMongo<Producto>(doc as Record<string, unknown> | null);
+  }
+}
+
+export async function conectarMongo(): Promise<void> {
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error("Falta MONGO_URI en .env");
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
+}
+
+// No borra ni sobrescribe documentos existentes. Se usa sólo en la base del examen.
+export async function sembrarMongo(): Promise<void> {
+  await CategoriaModel.bulkWrite(datosIniciales.categories.map((dato) => ({
+    updateOne: { filter: { CategoryID: dato.CategoryID }, update: { $setOnInsert: dato }, upsert: true }
+  })));
+  await ProveedorModel.bulkWrite(datosIniciales.suppliers.map((dato) => ({
+    updateOne: { filter: { SupplierID: dato.SupplierID }, update: { $setOnInsert: dato }, upsert: true }
+  })));
+  await ProductoModel.bulkWrite(datosIniciales.products.map((dato) => ({
+    updateOne: { filter: { ProductID: dato.ProductID }, update: { $setOnInsert: dato }, upsert: true }
+  })));
+}
+
+FIN DEL ARCHIVO: src/repositories/mongo.ts
+
+====================================================================================================
+ANEXO H - .env.example
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+# Generar el .env real con: npm run setup
+DB_MODE=memory
+PORT=4317
+MONGO_URI=mongodb://127.0.0.1:27017/examen02_trpc
+DEMO_EMAIL=demo@local.test
+DEMO_PASSWORD_HASH=HASH_GENERADO_AUTOMATICAMENTE
+JWT_SECRET=SECRETO_GENERADO_AUTOMATICAMENTE
+
+FIN DEL ARCHIVO: .env.example
+
+====================================================================================================
+ANEXO I - scripts/configurar.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import { existsSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { hashSync } from "bcryptjs";
+
+const archivo = new URL("../.env", import.meta.url);
+if (existsSync(archivo)) {
+  console.log("Ya existe .env: no se modificó. Para ver la configuración, abre el archivo localmente.");
+} else {
+  const contenido = [
+    "# Solo demostración local del examen; nunca subas este archivo a Git.",
+    "DB_MODE=memory",
+    "PORT=4317",
+    "MONGO_URI=mongodb://127.0.0.1:27017/examen02_trpc",
+    "DEMO_EMAIL=demo@local.test",
+    `DEMO_PASSWORD_HASH=${hashSync("Demo12345!", 10)}`,
+    "DEMO_PASSWORD_CLIENT=Demo12345!",
+    `JWT_SECRET=${randomBytes(48).toString("hex")}`,
+    ""
+  ].join("\n");
+  writeFileSync(archivo, contenido, { flag: "wx", mode: 0o600 });
+  console.log("Se creó .env para la demostración local. Usuario: demo@local.test / Clave: Demo12345!");
+  console.log("La contraseña de demostración es pública; no usar en un sistema real.");
+}
+
+FIN DEL ARCHIVO: scripts/configurar.ts
+
+====================================================================================================
+ANEXO J - src/server/auth.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import bcrypt from "bcryptjs";
+import jwt, { type JwtPayload } from "jsonwebtoken";
+
+export interface Usuario { email: string; rol: "admin"; }
+
+function secreto(): string {
+  const valor = process.env.JWT_SECRET;
+  if (!valor || valor.length < 32) {
+    throw new Error("JWT_SECRET no configurado. Ejecuta npm run setup.");
+  }
+  return valor;
+}
+
+export async function autenticar(email: string, password: string): Promise<{ token: string; usuario: Usuario } | null> {
+  const correo = process.env.DEMO_EMAIL;
+  const hash = process.env.DEMO_PASSWORD_HASH;
+  if (!correo || !hash) throw new Error("Usuario de demostración no configurado. Ejecuta npm run setup.");
+  if (email !== correo || !(await bcrypt.compare(password, hash))) return null;
+  const usuario: Usuario = { email: correo, rol: "admin" };
+  const token = jwt.sign({ rol: usuario.rol }, secreto(), {
+    algorithm: "HS256", subject: usuario.email, expiresIn: "1h", issuer: "examen02-trpc"
+  });
+  return { token, usuario };
+}
+
+export function usuarioDesdeToken(authorization: string | undefined): Usuario | null {
+  if (!authorization?.startsWith("Bearer ")) return null;
+  try {
+    const datos = jwt.verify(authorization.substring(7), secreto(), {
+      algorithms: ["HS256"], issuer: "examen02-trpc"
+    }) as JwtPayload;
+    if (typeof datos.sub !== "string" || datos.sub !== process.env.DEMO_EMAIL || datos.rol !== "admin") return null;
+    return { email: datos.sub, rol: "admin" };
+  } catch {
+    return null;
+  }
+}
+
+FIN DEL ARCHIVO: src/server/auth.ts
+
+====================================================================================================
+ANEXO K - src/server/context.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import type { CreateHTTPContextOptions } from "@trpc/server/adapters/standalone";
+import type { Repositorio } from "../types.js";
+import { usuarioDesdeToken, type Usuario } from "./auth.js";
+
+export interface Contexto {
+  repo: Repositorio;
+  usuario: Usuario | null;
+}
+
+export function construirContexto(repo: Repositorio) {
+  return ({ req }: CreateHTTPContextOptions): Contexto => ({
+    repo,
+    usuario: usuarioDesdeToken(req.headers.authorization)
+  });
+}
+
+FIN DEL ARCHIVO: src/server/context.ts
+
+====================================================================================================
+ANEXO L - src/server/router.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import { initTRPC, TRPCError } from "@trpc/server";
+import { z } from "zod";
+import type { Contexto } from "./context.js";
+import { autenticar } from "./auth.js";
+import type { Producto } from "../types.js";
+
+const t = initTRPC.context<Contexto>().create();
+const publico = t.procedure;
+const protegido = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.usuario) throw new TRPCError({ code: "UNAUTHORIZED", message: "Se requiere JWT válido" });
+  return next({ ctx: { usuario: ctx.usuario } });
+});
+
+const id = z.number().int().positive();
+const campoProducto = z.enum([
+  "ProductID", "ProductName", "SupplierID", "CategoryID",
+  "QuantityPerUnit", "UnitPrice", "UnitsInStock", "ReorderLevel"
+]);
+const datosProducto = z.object({
+  ProductID: id,
+  ProductName: z.string().trim().min(2).max(150),
+  SupplierID: id,
+  CategoryID: id,
+  QuantityPerUnit: z.string().trim().min(1).max(150),
+  UnitPrice: z.number().nonnegative(),
+  UnitsInStock: z.number().int().nonnegative(),
+  ReorderLevel: z.number().int().nonnegative()
+}).strict();
+const cambiosProducto = datosProducto.omit({ ProductID: true }).partial().refine(
+  (cambios) => Object.keys(cambios).length > 0,
+  { message: "Indica al menos un campo para modificar" }
+);
+
+async function validarRelaciones(repo: Contexto["repo"], producto: Pick<Producto, "CategoryID" | "SupplierID">): Promise<void> {
+  const [categorias, proveedores] = await Promise.all([repo.categorias(), repo.proveedores()]);
+  if (!categorias.some((c) => c.CategoryID === producto.CategoryID)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "CategoryID no existe" });
+  }
+  if (!proveedores.some((p) => p.SupplierID === producto.SupplierID)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "SupplierID no existe" });
+  }
+}
+
+function traducirError(error: unknown): never {
+  if (error instanceof Error && (error.message === "PRODUCTO_DUPLICADO" ||
+    ("code" in error && error.code === 11000))) {
+    throw new TRPCError({ code: "CONFLICT", message: "ProductID ya existe" });
+  }
+  throw error;
+}
+
+export const appRouter = t.router({
+  auth: t.router({
+    login: publico.input(z.object({ email: z.email(), password: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        const acceso = await autenticar(input.email, input.password);
+        if (!acceso) throw new TRPCError({ code: "UNAUTHORIZED", message: "Credenciales incorrectas" });
+        return acceso;
+      }),
+    perfil: protegido.query(({ ctx }) => ctx.usuario)
+  }),
+
+  categorias: t.router({
+    todas: publico.query(({ ctx }) => ctx.repo.categorias())
+  }),
+
+  proveedores: t.router({
+    todos: publico.query(({ ctx }) => ctx.repo.proveedores())
+  }),
+
+  productos: t.router({
+    // A. Todos los registros
+    todos: publico.query(({ ctx }) => ctx.repo.productos()),
+    uno: publico.input(z.object({ ProductID: id })).query(async ({ input, ctx }) =>
+      ctx.repo.productoPorId(input.ProductID)),
+
+    // B. Proyección de campos elegidos por el cliente
+    campos: publico.input(z.object({ campos: z.array(campoProducto).min(1) }))
+      .query(async ({ input, ctx }) => (await ctx.repo.productos()).map((producto) => {
+        const seleccionado: Record<string, string | number> = {};
+        for (const campo of input.campos) seleccionado[campo] = producto[campo];
+        return seleccionado;
+      })),
+
+    // C. Filtros
+    filtrar: publico.input(z.object({
+      categoriaId: id.optional(),
+      proveedorId: id.optional(),
+      nombre: z.string().trim().optional(),
+      precioMinimo: z.number().nonnegative().optional(),
+      precioMaximo: z.number().nonnegative().optional()
+    }).refine((v) => v.precioMinimo === undefined || v.precioMaximo === undefined ||
+      v.precioMinimo <= v.precioMaximo, { message: "precioMinimo debe ser <= precioMaximo" }))
+      .query(async ({ ctx, input }) => (await ctx.repo.productos()).filter((p) =>
+        (input.categoriaId === undefined || p.CategoryID === input.categoriaId) &&
+        (input.proveedorId === undefined || p.SupplierID === input.proveedorId) &&
+        (input.nombre === undefined || p.ProductName.toLowerCase().includes(input.nombre.toLowerCase())) &&
+        (input.precioMinimo === undefined || p.UnitPrice >= input.precioMinimo) &&
+        (input.precioMaximo === undefined || p.UnitPrice <= input.precioMaximo)
+      )),
+
+    // D. JOIN entre productos, categorías y proveedores
+    relaciones: publico.query(async ({ ctx }) => {
+      const [productos, categorias, proveedores] = await Promise.all([
+        ctx.repo.productos(), ctx.repo.categorias(), ctx.repo.proveedores()
+      ]);
+      const porCategoria = new Map(categorias.map((c) => [c.CategoryID, c]));
+      const porProveedor = new Map(proveedores.map((p) => [p.SupplierID, p]));
+      return productos.map((p) => ({
+        ...p, Categoria: porCategoria.get(p.CategoryID) ?? null,
+        Proveedor: porProveedor.get(p.SupplierID) ?? null
+      }));
+    }),
+
+    // D. Agregación: conteo de productos y precio promedio por categoría
+    agregacion: publico.query(async ({ ctx }) => {
+      const [productos, categorias] = await Promise.all([ctx.repo.productos(), ctx.repo.categorias()]);
+      return categorias.map((categoria) => {
+        const lista = productos.filter((p) => p.CategoryID === categoria.CategoryID);
+        const suma = lista.reduce((acum, p) => acum + p.UnitPrice, 0);
+        return {
+          CategoryID: categoria.CategoryID,
+          CategoryName: categoria.CategoryName,
+          totalProductos: lista.length,
+          precioPromedio: lista.length ? Math.round((suma / lista.length) * 100) / 100 : 0
+        };
+      });
+    }),
+
+    // F. Paginación y ordenamiento
+    paginar: publico.input(z.object({
+      pagina: z.number().int().positive().default(1),
+      limite: z.number().int().min(1).max(100).default(5),
+      ordenarPor: campoProducto.default("ProductID"),
+      direccion: z.enum(["asc", "desc"]).default("asc")
+    })).query(async ({ ctx, input }) => {
+      const registros = await ctx.repo.productos();
+      const ordenados = [...registros].sort((a, b) => {
+        const comparacion = typeof a[input.ordenarPor] === "string"
+          ? String(a[input.ordenarPor]).localeCompare(String(b[input.ordenarPor]))
+          : Number(a[input.ordenarPor]) - Number(b[input.ordenarPor]);
+        return input.direccion === "asc" ? comparacion : -comparacion;
+      });
+      const inicio = (input.pagina - 1) * input.limite;
+      return {
+        pagina: input.pagina, limite: input.limite, total: registros.length,
+        totalPaginas: Math.ceil(registros.length / input.limite),
+        resultados: ordenados.slice(inicio, inicio + input.limite)
+      };
+    }),
+
+    // E + G. CRUD protegido por JWT
+    crear: protegido.input(datosProducto).mutation(async ({ ctx, input }) => {
+      await validarRelaciones(ctx.repo, input);
+      try { return await ctx.repo.insertar(input); } catch (error) { return traducirError(error); }
+    }),
+    actualizar: protegido.input(z.object({ ProductID: id, cambios: cambiosProducto }))
+      .mutation(async ({ ctx, input }) => {
+        const original = await ctx.repo.productoPorId(input.ProductID);
+        if (!original) throw new TRPCError({ code: "NOT_FOUND", message: "Producto no encontrado" });
+        await validarRelaciones(ctx.repo, { ...original, ...input.cambios });
+        const actualizado = await ctx.repo.modificar(input.ProductID, input.cambios);
+        if (!actualizado) throw new TRPCError({ code: "NOT_FOUND" });
+        return actualizado;
+      }),
+    eliminar: protegido.input(z.object({ ProductID: id })).mutation(async ({ ctx, input }) => {
+      const eliminado = await ctx.repo.eliminar(input.ProductID);
+      if (!eliminado) throw new TRPCError({ code: "NOT_FOUND", message: "Producto no encontrado" });
+      return eliminado;
+    })
+  })
+});
+
+export type AppRouter = typeof appRouter;
+
+FIN DEL ARCHIVO: src/server/router.ts
+
+====================================================================================================
+ANEXO M - src/server/index.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import "dotenv/config";
+import { createHTTPServer } from "@trpc/server/adapters/standalone";
+import { appRouter } from "./router.js";
+import { construirContexto } from "./context.js";
+import { RepositorioMemoria } from "../repositories/memoria.js";
+import { RepositorioMongo, conectarMongo } from "../repositories/mongo.js";
+import type { Repositorio } from "../types.js";
+
+async function iniciar(): Promise<void> {
+  const modo = (process.env.DB_MODE ?? "memory").toLowerCase();
+  let repo: Repositorio;
+  if (modo === "mongo") {
+    await conectarMongo();
+    repo = new RepositorioMongo();
+  } else if (modo === "memory") {
+    repo = new RepositorioMemoria();
+  } else {
+    throw new Error("DB_MODE debe ser memory o mongo");
+  }
+
+  const puerto = Number(process.env.PORT ?? 4317);
+  if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) throw new Error("PORT inválido");
+  const servidor = createHTTPServer({ router: appRouter, createContext: construirContexto(repo) });
+  servidor.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`Puerto ${puerto} ocupado. Cambia PORT en .env y reinicia.`);
+    } else {
+      console.error(error);
+    }
+    process.exitCode = 1;
+  });
+  servidor.listen(puerto, "127.0.0.1", () => {
+    console.log(`Servidor tRPC listo | modo=${modo} | http://127.0.0.1:${puerto}`);
+    console.log(`Prueba: http://127.0.0.1:${puerto}/productos.todos`);
+  });
+}
+
+iniciar().catch((error: unknown) => {
+  console.error("No se pudo iniciar el servidor:", error);
+  process.exitCode = 1;
+});
+
+FIN DEL ARCHIVO: src/server/index.ts
+
+====================================================================================================
+ANEXO N - src/client/pruebas.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import "dotenv/config";
+import assert from "node:assert/strict";
+import { randomInt } from "node:crypto";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import type { AppRouter } from "../server/router.js";
+import type { NuevoProducto } from "../types.js";
+
+const puerto = Number(process.env.PORT ?? 4317);
+let token = "";
+const cliente = createTRPCClient<AppRouter>({
+  links: [httpBatchLink({
+    url: `http://127.0.0.1:${puerto}`,
+    headers: () => token ? { authorization: `Bearer ${token}` } : {}
+  })]
+});
+
+function paso(etiqueta: string, descripcion: string, resultado: unknown): void {
+  console.log(`\n========== ${etiqueta}: ${descripcion} ==========`);
+  console.log(JSON.stringify(resultado, null, 2));
+}
+
+async function probar(): Promise<void> {
+  // Datos base compartidos con la práctica de GraphQL de Semana 9.
+  const [categorias, proveedores, todos] = await Promise.all([
+    cliente.categorias.todas.query(),
+    cliente.proveedores.todos.query(),
+    cliente.productos.todos.query()
+  ]);
+  assert.ok(categorias.length >= 8, "Deben existir al menos ocho categorías");
+  assert.ok(proveedores.length >= 29, "Deben existir al menos 29 proveedores");
+  assert.ok(todos.length >= 77, "Deben existir al menos 77 productos");
+  paso("A", "CONSULTAR TODOS", { total: todos.length, primeros: todos.slice(0, 3) });
+
+  const campos = await cliente.productos.campos.query({
+    campos: ["ProductID", "ProductName", "UnitPrice"]
+  });
+  assert.equal(campos.length, todos.length);
+  assert.deepEqual(Object.keys(campos[0]).sort(), ["ProductID", "ProductName", "UnitPrice"].sort());
+  paso("B", "SELECCIONAR CAMPOS", { total: campos.length, primeros: campos.slice(0, 3) });
+
+  const filtrados = await cliente.productos.filtrar.query({ categoriaId: 1, precioMinimo: 15 });
+  assert.ok(filtrados.length > 0);
+  assert.ok(filtrados.every((p) => p.CategoryID === 1 && p.UnitPrice >= 15));
+  paso("C", "FILTROS", { total: filtrados.length, primeros: filtrados.slice(0, 3) });
+
+  const relaciones = await cliente.productos.relaciones.query();
+  assert.equal(relaciones.length, todos.length);
+  assert.ok(relaciones.every((p) => p.Categoria && p.Proveedor));
+  paso("D1", "JOIN PRODUCTOS + CATEGORIAS + PROVEEDORES", relaciones.slice(0, 2));
+
+  const resumen = await cliente.productos.agregacion.query();
+  assert.equal(resumen.length, categorias.length);
+  assert.equal(resumen.reduce((s, c) => s + c.totalProductos, 0), todos.length);
+  paso("D2", "AGREGACION POR CATEGORIA", resumen);
+
+  const pagina = await cliente.productos.paginar.query({
+    pagina: 1, limite: 5, ordenarPor: "UnitPrice", direccion: "desc"
+  });
+  assert.equal(pagina.total, todos.length);
+  assert.equal(pagina.resultados.length, 5);
+  assert.ok(pagina.resultados.every((p, i, a) => i === 0 || a[i - 1].UnitPrice >= p.UnitPrice));
+  paso("F", "PAGINACION Y ORDENAMIENTO", pagina);
+
+  const producto: NuevoProducto = {
+    ProductID: 900000000 + randomInt(10000000),
+    ProductName: "Producto examen tRPC",
+    CategoryID: 1,
+    SupplierID: 1,
+    QuantityPerUnit: "1 caja",
+    UnitPrice: 45.5,
+    UnitsInStock: 12,
+    ReorderLevel: 3
+  };
+
+  // Debe rechazar mutaciones no autenticadas.
+  let rechazo = false;
+  try {
+    await cliente.productos.crear.mutate(producto);
+  } catch (error) {
+    rechazo = (error as { data?: { code?: string } }).data?.code === "UNAUTHORIZED";
+    if (!rechazo) throw error;
+  }
+  assert.ok(rechazo, "Se esperaba rechazo UNAUTHORIZED sin JWT");
+  paso("G1", "ACCESO SIN JWT BLOQUEADO", { resultado: "UNAUTHORIZED (esperado)" });
+
+  const email = process.env.DEMO_EMAIL;
+  const password = process.env.DEMO_PASSWORD_CLIENT;
+  if (!email || !password) throw new Error("Faltan DEMO_EMAIL o DEMO_PASSWORD_CLIENT: ejecuta npm run setup");
+  const acceso = await cliente.auth.login.mutate({ email, password });
+  token = acceso.token;
+  const perfil = await cliente.auth.perfil.query();
+  assert.equal(perfil.email, email);
+  paso("G2", "LOGIN JWT Y ACCESO PROTEGIDO", { perfil, tokenGenerado: Boolean(token) });
+
+  // CRUD con recuperación tras error para no dejar datos de pruebas.
+  let creado = false;
+  try {
+    const nuevo = await cliente.productos.crear.mutate(producto);
+    creado = true;
+    assert.equal(nuevo.ProductID, producto.ProductID);
+    paso("E1", "INSERTAR", nuevo);
+
+    const editado = await cliente.productos.actualizar.mutate({
+      ProductID: producto.ProductID,
+      cambios: { ProductName: "Producto tRPC actualizado", UnitPrice: 59.9 }
+    });
+    assert.equal(editado.ProductName, "Producto tRPC actualizado");
+    assert.equal(editado.UnitPrice, 59.9);
+    paso("E2", "MODIFICAR", editado);
+
+    const borrado = await cliente.productos.eliminar.mutate({ ProductID: producto.ProductID });
+    creado = false;
+    assert.equal(borrado.ProductID, producto.ProductID);
+    const despues = await cliente.productos.uno.query({ ProductID: producto.ProductID });
+    assert.equal(despues, null);
+    paso("E3", "ELIMINAR", { eliminado: borrado, verificacion: despues });
+  } finally {
+    if (creado) await cliente.productos.eliminar.mutate({ ProductID: producto.ProductID });
+  }
+
+  console.log("\nTODAS LAS PRUEBAS tRPC FINALIZARON CORRECTAMENTE.");
+}
+
+probar().catch((error: unknown) => {
+  console.error("\nFALLO EN LAS PRUEBAS:", error);
+  process.exitCode = 1;
+});
+
+FIN DEL ARCHIVO: src/client/pruebas.ts
+
+====================================================================================================
+ANEXO O - scripts/verificar-datos.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import assert from "node:assert/strict";
+import { datosIniciales } from "../src/data.js";
+import { RepositorioMemoria } from "../src/repositories/memoria.js";
+
+async function main(): Promise<void> {
+  const d = datosIniciales;
+  assert.equal(d.categories.length, 8);
+  assert.equal(d.suppliers.length, 29);
+  assert.equal(d.products.length, 77);
+  assert.equal(new Set(d.categories.map((c) => c.CategoryID)).size, 8);
+  assert.equal(new Set(d.suppliers.map((s) => s.SupplierID)).size, 29);
+  assert.equal(new Set(d.products.map((p) => p.ProductID)).size, 77);
+  for (const p of d.products) {
+    assert.ok(d.categories.some((c) => c.CategoryID === p.CategoryID));
+    assert.ok(d.suppliers.some((s) => s.SupplierID === p.SupplierID));
+  }
+  const repo = new RepositorioMemoria();
+  assert.equal((await repo.productos()).length, 77);
+  const creado = await repo.insertar({
+    ProductID: 999001, ProductName: "Prueba", CategoryID: 1, SupplierID: 1,
+    QuantityPerUnit: "1 und", UnitPrice: 11, UnitsInStock: 3, ReorderLevel: 1
+  });
+  assert.equal(creado.ProductID, 999001);
+  assert.equal((await repo.modificar(999001, { UnitPrice: 12 }))?.UnitPrice, 12);
+  assert.equal((await repo.eliminar(999001))?.ProductID, 999001);
+  assert.equal((await repo.productos()).length, 77);
+  console.log("OK: datos Northwind validados y CRUD en memoria verificado (8/29/77).");
+}
+main().catch((error: unknown) => { console.error(error); process.exitCode = 1; });
+
+FIN DEL ARCHIVO: scripts/verificar-datos.ts
+
+====================================================================================================
+ANEXO P - scripts/sembrar-mongo.ts
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+import "dotenv/config";
+import mongoose from "mongoose";
+import { conectarMongo, sembrarMongo, RepositorioMongo } from "../src/repositories/mongo.js";
+
+async function ejecutar(): Promise<void> {
+  if (process.env.DB_MODE !== "mongo") throw new Error("Configura DB_MODE=mongo en .env primero");
+  const uri = process.env.MONGO_URI ?? "";
+  if (!/\/examen02_trpc(?:\?|$)/.test(uri)) {
+    throw new Error("Por seguridad, la semilla solo admite la base dedicada /examen02_trpc");
+  }
+  await conectarMongo();
+  try {
+    await sembrarMongo();
+    const repo = new RepositorioMongo();
+    const conteos = await Promise.all([repo.categorias(), repo.proveedores(), repo.productos()]);
+    console.log(`MongoDB listo: categorias=${conteos[0].length}, proveedores=${conteos[1].length}, productos=${conteos[2].length}`);
+    console.log("Los registros existentes se conservaron; solo se insertaron los ausentes.");
+  } finally {
+    await mongoose.disconnect();
+  }
+}
+
+ ejecutar().catch((error: unknown) => { console.error(error); process.exitCode = 1; });
+
+FIN DEL ARCHIVO: scripts/sembrar-mongo.ts
+
+====================================================================================================
+ANEXO Q - .gitignore
+====================================================================================================
+INICIO DEL ARCHIVO:
+
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+capturas/*.png
+capturas/*.jpg
+capturas/*.txt
+
+FIN DEL ARCHIVO: .gitignore
+
+====================================================================================================
+COMANDOS FINALES DE VERIFICACIÓN (RESUMEN)
+====================================================================================================
+En la carpeta real del estudiante:
+
+    cd "E:\UTN\WEB III\Examen02-tRPC-corregido\Examen02-tRPC"
+    npm install
+    npm run setup
+    npm run check
+    npm run check:data
+
+PARA MEMORIA:
+    Editar .env -> DB_MODE=memory
+    Terminal 1: npm run start:trpc
+    Terminal 2: npm run test:trpc
+
+PARA MONGODB:
+    Detener servidor -> Ctrl + C
+    Editar .env -> DB_MODE=mongo
+    npm run seed:mongo
+    Terminal 1: npm run start:trpc
+    Terminal 2: npm run test:trpc
+
+RESULTADO FINAL VERIFICADO POR EL ESTUDIANTE EN AMBOS MODOS:
+    TODAS LAS PRUEBAS tRPC FINALIZARON CORRECTAMENTE.
+====================================================================================================
+
